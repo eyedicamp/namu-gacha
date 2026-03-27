@@ -2,18 +2,24 @@
 import { GachaResult } from '@/types/gacha';
 import { determineRarity } from './rarity';
 
+// heegyu/namuwiki-extracted 데이터셋 정보
+const DATASET = 'heegyu/namuwiki-extracted';
+const CONFIG = 'default';
+const SPLIT = 'train';
+const TOTAL_ROWS = 565000; // 약 565k rows
+
 // ─────────────────────────────────────────────
 // 메인 함수
 // ─────────────────────────────────────────────
 export async function fetchRandomDocument(): Promise<GachaResult> {
-  const MAX_ATTEMPTS = 3;
+  const MAX_ATTEMPTS = 5;
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     try {
-      // 위키백과에서 랜덤 문서 1개의 제목 + 요약 + 본문 길이를 한번에 가져오기
-      const result = await getRandomWikipediaArticle();
+      const result = await getRandomFromHuggingFace();
       if (result) return result;
-    } catch {
+    } catch (e) {
+      console.error(`시도 ${attempt + 1} 실패:`, e);
       continue;
     }
   }
@@ -22,71 +28,52 @@ export async function fetchRandomDocument(): Promise<GachaResult> {
 }
 
 // ─────────────────────────────────────────────
-// 위키백과 랜덤 문서 가져오기 (제목 + 요약 + 본문 길이 한번에)
+// Hugging Face Dataset Viewer API로 랜덤 문서 가져오기
 // ─────────────────────────────────────────────
-async function getRandomWikipediaArticle(): Promise<GachaResult | null> {
-  // 1단계: 랜덤 제목 가져오기
-  const randomUrl =
-    `https://ko.wikipedia.org/w/api.php?` +
+async function getRandomFromHuggingFace(): Promise<GachaResult | null> {
+  // 랜덤 offset 생성
+  const randomOffset = Math.floor(Math.random() * TOTAL_ROWS);
+
+  const url =
+    `https://datasets-server.huggingface.co/rows?` +
     new URLSearchParams({
-      action: 'query',
-      list: 'random',
-      rnnamespace: '0',
-      rnlimit: '1',
-      format: 'json',
-      origin: '*',
+      dataset: DATASET,
+      config: CONFIG,
+      split: SPLIT,
+      offset: String(randomOffset),
+      length: '1',
     });
 
-  const randomRes = await fetch(randomUrl, {
-    headers: { 'User-Agent': 'NamuGacha/1.0' },
-    signal: AbortSignal.timeout(5000),
+  const res = await fetch(url, {
+    headers: {
+      'User-Agent': 'NamuGacha/1.0',
+    },
+    signal: AbortSignal.timeout(8000),
   });
 
-  if (!randomRes.ok) return null;
-  const randomData = await randomRes.json();
-  const title: string = randomData.query.random[0].title;
+  if (!res.ok) {
+    throw new Error(`HuggingFace API 실패: ${res.status}`);
+  }
 
-  // 2단계: 해당 문서의 요약 + 본문 길이 가져오기
-  const detailUrl =
-    `https://ko.wikipedia.org/w/api.php?` +
-    new URLSearchParams({
-      action: 'query',
-      titles: title,
-      prop: 'extracts|revisions|links',
-      exintro: 'true',           // 도입부만
-      explaintext: 'true',       // 마크업 제거된 텍스트
-      exsentences: '5',          // 최대 5문장
-      rvprop: 'size',            // 문서 전체 크기
-      pllimit: 'max',            // 링크 수
-      format: 'json',
-      origin: '*',
-    });
+  const data = await res.json();
 
-  const detailRes = await fetch(detailUrl, {
-    headers: { 'User-Agent': 'NamuGacha/1.0' },
-    signal: AbortSignal.timeout(5000),
-  });
+  // rows 배열에서 첫 번째 row 가져오기
+  if (!data.rows || data.rows.length === 0) return null;
 
-  if (!detailRes.ok) return null;
-  const detailData = await detailRes.json();
+  const row = data.rows[0].row;
+  const title: string = row.title || '';
+  const text: string = row.text || '';
 
-  const pages = detailData.query.pages;
-  const pageId = Object.keys(pages)[0];
-  const page = pages[pageId];
+  // 빈 문서 스킵
+  if (!title || text.length < 30) return null;
 
-  // 문서가 없거나 요약이 너무 짧으면 스킵
-  if (!page || pageId === '-1') return null;
+  // 요약 추출
+  const summary = extractSummary(text, title);
+  if (summary === '요약을 불러올 수 없습니다.') return null;
 
-  const extract: string = page.extract || '';
-  if (extract.length < 20) return null;
-
-  // 문서 크기 (바이트)
-  const contentLength: number = page.revisions?.[0]?.size || extract.length * 5;
-
-  // 링크 수
-  const linkCount: number = page.links?.length || 0;
-
-  const summary = trimSummary(extract);
+  // 레어도 판정
+  const contentLength = text.length;
+  const linkCount = estimateLinkCount(text);
   const rarity = determineRarity(contentLength, linkCount);
 
   return {
@@ -100,36 +87,54 @@ async function getRandomWikipediaArticle(): Promise<GachaResult | null> {
 }
 
 // ─────────────────────────────────────────────
-// 요약 다듬기
+// 링크 수 추정 (전처리된 텍스트에서)
 // ─────────────────────────────────────────────
-function trimSummary(text: string): string {
-  if (!text || text.length < 5) {
+function estimateLinkCount(text: string): number {
+  // namuwiki-extracted는 마크업이 제거되어 있으므로
+  // 문서 길이 기반으로 추정
+  // 평균적으로 나무위키 문서는 200자당 약 1개의 링크
+  return Math.floor(text.length / 200);
+}
+
+// ─────────────────────────────────────────────
+// 요약 추출 (전처리된 깨끗한 텍스트에서)
+// ─────────────────────────────────────────────
+function extractSummary(text: string, title: string): string {
+  // namuwiki-extracted는 이미 마크업이 제거된 상태
+  // 첫 부분에서 의미 있는 문장 추출
+
+  const cleaned = text
+    .replace(/\n{2,}/g, '\n')
+    .replace(/^\s+/gm, '')
+    .trim();
+
+  // 줄 단위로 분리
+  const lines = cleaned.split('\n').filter((line) => line.trim().length > 0);
+
+  // 제목과 동일한 줄, 너무 짧은 줄 제거
+  const meaningful = lines.filter((line) => {
+    const trimmed = line.trim();
+    if (trimmed.length < 15) return false;
+    if (trimmed === title) return false;
+    // 메타 정보 제거
+    if (/^(분류|틀|파일|목차|각주|관련 문서)/.test(trimmed)) return false;
+    if (/^\d+\.\s/.test(trimmed) && trimmed.length < 30) return false;
+    return true;
+  });
+
+  if (meaningful.length === 0) {
     return '요약을 불러올 수 없습니다.';
   }
 
-  // 위키백과 특유의 괄호 발음 표기 정리
-  const cleaned = text
-    .replace(/\s*$$[^)]*$$\s*/g, ' ')  // (영어: ...) 같은 괄호 제거
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  const sentences = cleaned
-    .split(/(?<=[.다요함됨임음까!?])\s+/)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 5);
-
-  const meaningful = sentences.filter((s) => s.length >= 10);
-
-  if (meaningful.length === 0) {
-    return cleaned.length > 150 ? cleaned.slice(0, 150) + '...' : cleaned;
-  }
-
+  // 첫 번째 의미 있는 줄에서 문장 추출
   let summary = meaningful[0];
 
+  // 너무 짧으면 다음 줄도 합치기
   if (summary.length < 80 && meaningful.length > 1) {
     summary += ' ' + meaningful[1];
   }
 
+  // 150자 제한
   if (summary.length > 150) {
     const cutPoint = summary.slice(0, 170).search(/[.다요함됨임음까!?]\s/);
     if (cutPoint > 50) {
