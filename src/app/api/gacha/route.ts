@@ -1,4 +1,3 @@
-// src/app/api/gacha/route.ts
 import { NextResponse } from 'next/server';
 import { fetchRandomDocument } from '@/lib/namuwiki';
 
