@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { GachaResult } from '@/types/gacha';
 import GachaCard from '@/components/GachaCard';
 import Navigation from '@/components/Navigation';
+import AdModal from '@/components/AdModal';  // ✅ 추가
 
 type Phase = 'idle' | 'loading' | 'result';
 
@@ -15,23 +16,25 @@ export default function Home() {
   const [pullCount, setPullCount] = useState(0);
   const [remaining, setRemaining] = useState<number>(10);
   const [isDevMode, setIsDevMode] = useState(false);
+  
+  // ✅ 광고 관련 상태
+  const [adWatchCount, setAdWatchCount] = useState(0);
+  const [isAdModalOpen, setIsAdModalOpen] = useState(false);  // ✅ 모달 상태
 
-  // ✅ 개발 모드 체크 (로컬에서만 무제한)
   useEffect(() => {
     const isDev = process.env.NODE_ENV === 'development' || window.location.hostname === 'localhost';
     setIsDevMode(isDev);
   }, []);
 
-  // 로컬스토리지에서 오늘 뽑기 횟수 불러오기
   useEffect(() => {
     if (isDevMode) {
-      // 개발 모드에서는 항상 무제한
       setRemaining(999);
       return;
     }
 
     const today = new Date().toISOString().split('T')[0];
     const stored = localStorage.getItem('gacha_daily');
+    const adStored = localStorage.getItem('gacha_ad_daily');
     
     if (stored) {
       const data = JSON.parse(stored);
@@ -39,13 +42,24 @@ export default function Home() {
         setPullCount(data.count);
         setRemaining(10 - data.count);
       } else {
-        // 날짜 바뀌면 초기화
         localStorage.setItem('gacha_daily', JSON.stringify({ date: today, count: 0 }));
         setPullCount(0);
         setRemaining(10);
       }
     } else {
       localStorage.setItem('gacha_daily', JSON.stringify({ date: today, count: 0 }));
+    }
+
+    if (adStored) {
+      const adData = JSON.parse(adStored);
+      if (adData.date === today) {
+        setAdWatchCount(adData.count);
+      } else {
+        localStorage.setItem('gacha_ad_daily', JSON.stringify({ date: today, count: 0 }));
+        setAdWatchCount(0);
+      }
+    } else {
+      localStorage.setItem('gacha_ad_daily', JSON.stringify({ date: today, count: 0 }));
     }
   }, [isDevMode]);
 
@@ -59,9 +73,8 @@ export default function Home() {
       id: `${Date.now()}-${Math.random()}`,
     };
     
-    items.unshift(newItem); // 최신 항목을 앞에 추가
+    items.unshift(newItem);
     
-    // 최대 100개까지만 저장
     if (items.length > 100) {
       items.pop();
     }
@@ -71,7 +84,7 @@ export default function Home() {
 
   const handleGacha = async () => {
     if (!isDevMode && remaining <= 0) {
-      setError('오늘의 뽑기 횟수를 모두 사용했습니다! 내일 다시 도전하세요.');
+      setError('오늘의 뽑기 횟수를 모두 사용했습니다! 광고를 시청하여 횟수를 추가하세요.');
       return;
     }
 
@@ -86,16 +99,12 @@ export default function Home() {
       
       const data: GachaResult = await res.json();
 
-      // 등급에 따라 서스펜스 딜레이
       const delay = getRevealDelay(data.rarity);
       await new Promise((resolve) => setTimeout(resolve, delay));
 
       setResult(data);
-      
-      // 히스토리에 저장
       saveToHistory(data);
       
-      // 개발 모드가 아닐 때만 카운트 증가
       if (!isDevMode) {
         const today = new Date().toISOString().split('T')[0];
         const newCount = pullCount + 1;
@@ -113,12 +122,47 @@ export default function Home() {
     }
   };
 
+  // ✅ 광고 시청 시작
+  const handleWatchAd = () => {
+    if (adWatchCount >= 2) {
+      setError('오늘 광고 시청 횟수를 모두 사용했습니다! (최대 2회)');
+      return;
+    }
+    setIsAdModalOpen(true);
+  };
+
+  // ✅ 광고 시청 완료
+  const handleAdComplete = () => {
+    const today = new Date().toISOString().split('T')[0];
+    const newAdCount = adWatchCount + 1;
+    
+    localStorage.setItem('gacha_ad_daily', JSON.stringify({ date: today, count: newAdCount }));
+    setAdWatchCount(newAdCount);
+
+    const stored = localStorage.getItem('gacha_daily');
+    if (stored) {
+      const data = JSON.parse(stored);
+      const newCount = Math.max(0, data.count - 5);
+      localStorage.setItem('gacha_daily', JSON.stringify({ date: today, count: newCount }));
+      setPullCount(newCount);
+      setRemaining(10 - newCount);
+    }
+
+    setError('✅ 광고 시청 완료! 뽑기 횟수 +5 추가되었습니다.');
+    setTimeout(() => setError(null), 3000);
+  };
+
   return (
     <main className="min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center p-6 overflow-hidden pt-24">
-      {/* ✅ Navigation 추가 (상단 고정) */}
       <Navigation />
       
-      {/* 타이틀 */}
+      {/* ✅ 광고 모달 */}
+      <AdModal
+        isOpen={isAdModalOpen}
+        onClose={() => setIsAdModalOpen(false)}
+        onComplete={handleAdComplete}
+      />
+      
       <motion.h1
         className="text-4xl font-bold mb-2"
         initial={{ opacity: 0, y: -20 }}
@@ -136,7 +180,6 @@ export default function Home() {
         나무위키 랜덤 문서 뽑기
       </motion.p>
 
-      {/* ✅ 남은 기회 표시 (텍스트 변경 + 개발 모드 표시) */}
       <motion.div
         className="mb-4 px-6 py-3 bg-white/10 backdrop-blur-sm rounded-xl border border-white/20"
         initial={{ opacity: 0, scale: 0.9 }}
@@ -154,7 +197,20 @@ export default function Home() {
         </p>
       </motion.div>
 
-      {/* 뽑기 버튼 */}
+      {/* ✅ 광고 시청 버튼 */}
+      {!isDevMode && remaining === 0 && adWatchCount < 2 && (
+        <motion.button
+          onClick={handleWatchAd}
+          className="mb-4 px-6 py-3 rounded-xl text-sm font-bold bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 transition-all"
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+        >
+          📺 광고 보고 +5회 받기 ({2 - adWatchCount}회 남음)
+        </motion.button>
+      )}
+
       <motion.button
         onClick={handleGacha}
         disabled={phase === 'loading' || (!isDevMode && remaining <= 0)}
@@ -172,7 +228,6 @@ export default function Home() {
         {phase === 'loading' ? '뽑는 중...' : (!isDevMode && remaining <= 0) ? '오늘 뽑기 종료' : '🎲 뽑기!'}
       </motion.button>
 
-      {/* 뽑기 카운터 */}
       {!isDevMode && pullCount > 0 && (
         <motion.p
           className="mt-3 text-xs text-gray-600"
@@ -183,11 +238,10 @@ export default function Home() {
         </motion.p>
       )}
 
-      {/* 에러 */}
       <AnimatePresence>
         {error && (
           <motion.p
-            className="mt-6 text-red-400"
+            className={`mt-6 ${error.includes('✅') ? 'text-green-400' : 'text-red-400'}`}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
@@ -197,7 +251,6 @@ export default function Home() {
         )}
       </AnimatePresence>
 
-      {/* 로딩 & 결과 */}
       <div className="mt-10 w-full max-w-md flex flex-col items-center min-h-[320px]">
         <AnimatePresence mode="wait">
           {phase === 'loading' && (
