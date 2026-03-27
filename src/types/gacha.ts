@@ -2,8 +2,10 @@ export type GachaRarity = 'Normal' | 'Rare' | 'Epic' | 'Legendary' | 'Mythic';
 
 export interface GachaResult {
   title: string;
+  summary: string;        // ✅ 추가
   url: string;
-  rarity: 'Normal' | 'Rare' | 'Epic' | 'Legendary' | 'Mythic';
+  rarity: GachaRarity;    // ✅ 타입 단순화
+  contentLength: number;  // ✅ 추가
   remaining?: number;
   resetTime?: string;
   pulledAt?: string;
