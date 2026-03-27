@@ -2,11 +2,18 @@ export type GachaRarity = 'Normal' | 'Rare' | 'Epic' | 'Legendary' | 'Mythic';
 
 export interface GachaResult {
   title: string;
-  summary: string;
   url: string;
-  rarity: GachaRarity;
-  contentLength: number;
-  // linkCount 제거됨
+  rarity: 'Common' | 'Rare' | 'Epic' | 'Legendary' | 'Mythic';
+  remaining?: number;
+  resetTime?: string;
+  pulledAt?: string; // 뽑은 시간
+  id?: string; // 고유 ID
+}
+
+export interface GachaHistory {
+  date: string;
+  count: number;
+  items: GachaResult[];
 }
 
 export const RARITY_CONFIG: Record<GachaRarity, {
