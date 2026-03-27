@@ -9,7 +9,7 @@ interface LibraryCardProps {
 }
 
 const rarityColors = {
-  Common: 'from-gray-600 to-gray-700',
+  Normal: 'from-gray-600 to-gray-700',
   Rare: 'from-blue-600 to-blue-700',
   Epic: 'from-purple-600 to-purple-700',
   Legendary: 'from-yellow-500 to-orange-600',
@@ -17,7 +17,7 @@ const rarityColors = {
 };
 
 const rarityEmoji = {
-  Common: '⚪',
+  Normal: '⚪',
   Rare: '🔵',
   Epic: '🟣',
   Legendary: '🟡',
