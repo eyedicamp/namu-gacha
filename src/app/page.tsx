@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { GachaResult } from '@/types/gacha';
 import GachaCard from '@/components/GachaCard';
 import Navigation from '@/components/Navigation';
-import AdModal from '@/components/AdModal';  // ✅ 추가
+import RouletteModal from '@/components/RouletteModal';
 
 type Phase = 'idle' | 'loading' | 'result';
 
@@ -17,9 +17,9 @@ export default function Home() {
   const [remaining, setRemaining] = useState<number>(10);
   const [isDevMode, setIsDevMode] = useState(false);
   
-  // ✅ 광고 관련 상태
-  const [adWatchCount, setAdWatchCount] = useState(0);
-  const [isAdModalOpen, setIsAdModalOpen] = useState(false);  // ✅ 모달 상태
+  // 룰렛 보상 관련 상태
+  const [rouletteCount, setRouletteCount] = useState(0);
+  const [isRouletteOpen, setIsRouletteOpen] = useState(false);
 
   useEffect(() => {
     const isDev = process.env.NODE_ENV === 'development' || window.location.hostname === 'localhost';
@@ -34,7 +34,7 @@ export default function Home() {
 
     const today = new Date().toISOString().split('T')[0];
     const stored = localStorage.getItem('gacha_daily');
-    const adStored = localStorage.getItem('gacha_ad_daily');
+    const rouletteStored = localStorage.getItem('gacha_roulette_daily');
     
     if (stored) {
       const data = JSON.parse(stored);
@@ -50,16 +50,16 @@ export default function Home() {
       localStorage.setItem('gacha_daily', JSON.stringify({ date: today, count: 0 }));
     }
 
-    if (adStored) {
-      const adData = JSON.parse(adStored);
-      if (adData.date === today) {
-        setAdWatchCount(adData.count);
+    if (rouletteStored) {
+      const rouletteData = JSON.parse(rouletteStored);
+      if (rouletteData.date === today) {
+        setRouletteCount(rouletteData.count);
       } else {
-        localStorage.setItem('gacha_ad_daily', JSON.stringify({ date: today, count: 0 }));
-        setAdWatchCount(0);
+        localStorage.setItem('gacha_roulette_daily', JSON.stringify({ date: today, count: 0 }));
+        setRouletteCount(0);
       }
     } else {
-      localStorage.setItem('gacha_ad_daily', JSON.stringify({ date: today, count: 0 }));
+      localStorage.setItem('gacha_roulette_daily', JSON.stringify({ date: today, count: 0 }));
     }
   }, [isDevMode]);
 
@@ -84,7 +84,7 @@ export default function Home() {
 
   const handleGacha = async () => {
     if (!isDevMode && remaining <= 0) {
-      setError('오늘의 뽑기 횟수를 모두 사용했습니다! 광고를 시청하여 횟수를 추가하세요.');
+      setError('오늘의 뽑기 횟수를 모두 사용했습니다! 룰렛을 돌려 횟수를 추가하세요.');
       return;
     }
 
@@ -122,45 +122,44 @@ export default function Home() {
     }
   };
 
-  // ✅ 광고 시청 시작
-  const handleWatchAd = () => {
-    if (adWatchCount >= 2) {
-      setError('오늘 광고 시청 횟수를 모두 사용했습니다! (최대 2회)');
+  // 룰렛 열기
+  const handleOpenRoulette = () => {
+    if (rouletteCount >= 2) {
+      setError('오늘 룰렛 사용 횟수를 모두 사용했습니다! (최대 2회)');
       return;
     }
-    setIsAdModalOpen(true);
+    setIsRouletteOpen(true);
   };
 
-  // ✅ 광고 시청 완료
-  const handleAdComplete = () => {
+  // 룰렛 보상 적용
+  const handleRouletteReward = (reward: number) => {
     const today = new Date().toISOString().split('T')[0];
-    const newAdCount = adWatchCount + 1;
-    
-    localStorage.setItem('gacha_ad_daily', JSON.stringify({ date: today, count: newAdCount }));
-    setAdWatchCount(newAdCount);
+    const newRouletteCount = rouletteCount + 1;
+
+    localStorage.setItem('gacha_roulette_daily', JSON.stringify({ date: today, count: newRouletteCount }));
+    setRouletteCount(newRouletteCount);
 
     const stored = localStorage.getItem('gacha_daily');
     if (stored) {
       const data = JSON.parse(stored);
-      const newCount = Math.max(0, data.count - 5);
+      const newCount = Math.max(0, data.count - reward);
       localStorage.setItem('gacha_daily', JSON.stringify({ date: today, count: newCount }));
       setPullCount(newCount);
       setRemaining(10 - newCount);
     }
 
-    setError('✅ 광고 시청 완료! 뽑기 횟수 +5 추가되었습니다.');
-    setTimeout(() => setError(null), 3000);
+    setError(`✅ 룰렛 보상 획득! 뽑기 횟수 +${reward} 추가되었습니다.`);
+    setTimeout(() => setError(null), 3500);
   };
 
   return (
     <main className="min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center p-6 overflow-hidden pt-24">
       <Navigation />
       
-      {/* ✅ 광고 모달 */}
-      <AdModal
-        isOpen={isAdModalOpen}
-        onClose={() => setIsAdModalOpen(false)}
-        onComplete={handleAdComplete}
+      <RouletteModal
+        isOpen={isRouletteOpen}
+        onClose={() => setIsRouletteOpen(false)}
+        onReward={handleRouletteReward}
       />
       
       <motion.h1
@@ -197,17 +196,16 @@ export default function Home() {
         </p>
       </motion.div>
 
-      {/* ✅ 광고 시청 버튼 */}
-      {!isDevMode && remaining === 0 && adWatchCount < 2 && (
+      {!isDevMode && remaining === 0 && rouletteCount < 2 && (
         <motion.button
-          onClick={handleWatchAd}
+          onClick={handleOpenRoulette}
           className="mb-4 px-6 py-3 rounded-xl text-sm font-bold bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 transition-all"
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
         >
-          📺 광고 보고 +5회 받기 ({2 - adWatchCount}회 남음)
+          🎡 룰렛으로 추가 횟수 얻기 (+2~+15) ({2 - rouletteCount}회 남음)
         </motion.button>
       )}
 
