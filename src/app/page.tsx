@@ -9,12 +9,84 @@ import RouletteModal from '@/components/RouletteModal';
 
 type Phase = 'idle' | 'loading' | 'result';
 
+const BASE_DAILY_CHANCES = 10;
+
+interface DailyGachaState {
+  date: string;
+  usedCount: number;
+  bonusCount: number;
+}
+
+function getTodayString() {
+  return new Date().toISOString().split('T')[0];
+}
+
+function createDailyState(date: string): DailyGachaState {
+  return {
+    date,
+    usedCount: 0,
+    bonusCount: 0,
+  };
+}
+
+function normalizeDailyState(raw: unknown, today: string): DailyGachaState {
+  if (!raw || typeof raw !== 'object') {
+    return createDailyState(today);
+  }
+
+  const data = raw as Record<string, unknown>;
+
+  if (data.date !== today) {
+    return createDailyState(today);
+  }
+
+  const legacyCount =
+    typeof data.count === 'number' && Number.isFinite(data.count) ? data.count : 0;
+
+  const usedCount =
+    typeof data.usedCount === 'number' && Number.isFinite(data.usedCount)
+      ? data.usedCount
+      : legacyCount;
+
+  const bonusCount =
+    typeof data.bonusCount === 'number' && Number.isFinite(data.bonusCount)
+      ? data.bonusCount
+      : 0;
+
+  return {
+    date: today,
+    usedCount: Math.max(0, Math.floor(usedCount)),
+    bonusCount: Math.max(0, Math.floor(bonusCount)),
+  };
+}
+
+function getStoredDailyState(today: string): DailyGachaState {
+  const stored = localStorage.getItem('gacha_daily');
+  if (!stored) {
+    return createDailyState(today);
+  }
+
+  try {
+    return normalizeDailyState(JSON.parse(stored), today);
+  } catch {
+    return createDailyState(today);
+  }
+}
+
+function saveDailyState(state: DailyGachaState) {
+  localStorage.setItem('gacha_daily', JSON.stringify(state));
+}
+
+function getRemainingFromState(state: DailyGachaState) {
+  return Math.max(0, BASE_DAILY_CHANCES + state.bonusCount - state.usedCount);
+}
+
 export default function Home() {
   const [result, setResult] = useState<GachaResult | null>(null);
   const [phase, setPhase] = useState<Phase>('idle');
   const [error, setError] = useState<string | null>(null);
   const [pullCount, setPullCount] = useState(0);
-  const [remaining, setRemaining] = useState<number>(10);
+  const [remaining, setRemaining] = useState<number>(BASE_DAILY_CHANCES);
   const [isDevMode, setIsDevMode] = useState(false);
 
   // 룰렛 사용 관련 상태
@@ -34,35 +106,32 @@ export default function Home() {
       return;
     }
 
-    const today = new Date().toISOString().split('T')[0];
-    const stored = localStorage.getItem('gacha_daily');
+    const today = getTodayString();
+    const dailyState = getStoredDailyState(today);
+    saveDailyState(dailyState);
+
+    setPullCount(dailyState.usedCount);
+    setRemaining(getRemainingFromState(dailyState));
+
     const rouletteStored = localStorage.getItem('gacha_roulette_daily');
 
-    if (stored) {
-      const data = JSON.parse(stored);
-      if (data.date === today) {
-        setPullCount(data.count);
-        setRemaining(10 - data.count);
-      } else {
-        localStorage.setItem(
-          'gacha_daily',
-          JSON.stringify({ date: today, count: 0 })
-        );
-        setPullCount(0);
-        setRemaining(10);
-      }
-    } else {
-      localStorage.setItem(
-        'gacha_daily',
-        JSON.stringify({ date: today, count: 0 })
-      );
-    }
-
     if (rouletteStored) {
-      const rouletteData = JSON.parse(rouletteStored);
-      if (rouletteData.date === today) {
-        setRouletteCount(rouletteData.count);
-      } else {
+      try {
+        const rouletteData = JSON.parse(rouletteStored);
+        if (rouletteData.date === today) {
+          setRouletteCount(
+            typeof rouletteData.count === 'number' && Number.isFinite(rouletteData.count)
+              ? rouletteData.count
+              : 0
+          );
+        } else {
+          localStorage.setItem(
+            'gacha_roulette_daily',
+            JSON.stringify({ date: today, count: 0 })
+          );
+          setRouletteCount(0);
+        }
+      } catch {
         localStorage.setItem(
           'gacha_roulette_daily',
           JSON.stringify({ date: today, count: 0 })
@@ -74,6 +143,7 @@ export default function Home() {
         'gacha_roulette_daily',
         JSON.stringify({ date: today, count: 0 })
       );
+      setRouletteCount(0);
     }
   }, [isDevMode]);
 
@@ -120,15 +190,16 @@ export default function Home() {
       saveToHistory(data);
 
       if (!isDevMode) {
-        const today = new Date().toISOString().split('T')[0];
-        const newCount = pullCount + 1;
-        localStorage.setItem(
-          'gacha_daily',
-          JSON.stringify({ date: today, count: newCount })
-        );
+        const today = getTodayString();
+        const currentState = getStoredDailyState(today);
+        const nextState: DailyGachaState = {
+          ...currentState,
+          usedCount: currentState.usedCount + 1,
+        };
 
-        setPullCount(newCount);
-        setRemaining(10 - newCount);
+        saveDailyState(nextState);
+        setPullCount(nextState.usedCount);
+        setRemaining(getRemainingFromState(nextState));
       }
 
       setPhase('result');
@@ -147,13 +218,14 @@ export default function Home() {
       return;
     }
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = getTodayString();
     const newRouletteCount = rouletteCount + 1;
 
     localStorage.setItem(
       'gacha_roulette_daily',
       JSON.stringify({ date: today, count: newRouletteCount })
     );
+
     setRouletteCount(newRouletteCount);
     setError(null);
     setIsRouletteOpen(true);
@@ -161,19 +233,17 @@ export default function Home() {
 
   // 룰렛 보상 적용
   const handleRouletteReward = (reward: number) => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getTodayString();
+    const currentState = getStoredDailyState(today);
 
-    const stored = localStorage.getItem('gacha_daily');
-    if (stored) {
-      const data = JSON.parse(stored);
-      const newCount = Math.max(0, data.count - reward);
-      localStorage.setItem(
-        'gacha_daily',
-        JSON.stringify({ date: today, count: newCount })
-      );
-      setPullCount(newCount);
-      setRemaining(10 - newCount);
-    }
+    const nextState: DailyGachaState = {
+      ...currentState,
+      bonusCount: currentState.bonusCount + reward,
+    };
+
+    saveDailyState(nextState);
+    setPullCount(nextState.usedCount);
+    setRemaining(getRemainingFromState(nextState));
 
     setError(`✅ 룰렛 보상 획득! 뽑기 횟수 +${reward} 추가되었습니다.`);
     setTimeout(() => setError(null), 3500);
@@ -218,10 +288,7 @@ export default function Home() {
           ) : (
             <>
               남은 기회:{' '}
-              <span className="text-xl font-bold text-yellow-400">
-                {remaining}
-              </span>{' '}
-              / 10
+              <span className="text-xl font-bold text-yellow-400">{remaining}</span>
             </>
           )}
         </p>
@@ -246,9 +313,10 @@ export default function Home() {
         className={`
           px-8 py-4 rounded-2xl text-xl font-bold
           transition-all duration-300 cursor-pointer
-          ${phase === 'loading' || (!isDevMode && remaining <= 0)
-            ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
-            : 'bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500'
+          ${
+            phase === 'loading' || (!isDevMode && remaining <= 0)
+              ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+              : 'bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500'
           }
         `}
         whileHover={

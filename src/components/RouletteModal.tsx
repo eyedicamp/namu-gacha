@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 
 interface RouletteModalProps {
@@ -29,6 +29,22 @@ const WHEEL_SIZE = 320;
 const RADIUS = WHEEL_SIZE / 2;
 const CENTER = WHEEL_SIZE / 2;
 
+type RewardTier = 'small' | 'medium' | 'big' | 'jackpot';
+
+interface RewardEffect {
+  tier: RewardTier;
+  label: string;
+  glow: string;
+  accent: string;
+  gradient: string;
+  particleColors: string[];
+  particleCount: number;
+  shockwaveCount: number;
+  orbitCount: number;
+  burstDistance: number;
+  textShadow: string;
+}
+
 function polarToCartesian(angleDeg: number, radius: number) {
   const rad = (angleDeg * Math.PI) / 180;
   return {
@@ -44,6 +60,203 @@ function sectorPath(startDeg: number, endDeg: number) {
   return `M ${CENTER} ${CENTER} L ${p1.x} ${p1.y} A ${RADIUS} ${RADIUS} 0 0 1 ${p2.x} ${p2.y} Z`;
 }
 
+function getRewardTier(reward: number): RewardTier {
+  if (reward >= 15) return 'jackpot';
+  if (reward >= 10) return 'big';
+  if (reward >= 5) return 'medium';
+  return 'small';
+}
+
+function getRewardEffect(reward: number): RewardEffect {
+  const tier = getRewardTier(reward);
+
+  switch (tier) {
+    case 'jackpot':
+      return {
+        tier,
+        label: 'JACKPOT BONUS',
+        glow: 'rgba(239, 68, 68, 0.45)',
+        accent: 'rgba(250, 204, 21, 0.9)',
+        gradient:
+          'linear-gradient(90deg, #fde047 0%, #fb923c 30%, #ef4444 60%, #f472b6 100%)',
+        particleColors: ['#ffffff', '#fde047', '#fb923c', '#ef4444', '#f472b6'],
+        particleCount: 52,
+        shockwaveCount: 4,
+        orbitCount: 16,
+        burstDistance: 250,
+        textShadow: '0 0 40px rgba(251,146,60,0.9)',
+      };
+    case 'big':
+      return {
+        tier,
+        label: 'SUPER BONUS',
+        glow: 'rgba(234, 179, 8, 0.38)',
+        accent: 'rgba(249, 115, 22, 0.85)',
+        gradient:
+          'linear-gradient(90deg, #fde047 0%, #facc15 35%, #fb923c 70%, #f97316 100%)',
+        particleColors: ['#ffffff', '#fde047', '#facc15', '#fb923c'],
+        particleCount: 38,
+        shockwaveCount: 3,
+        orbitCount: 14,
+        burstDistance: 220,
+        textShadow: '0 0 34px rgba(250,204,21,0.85)',
+      };
+    case 'medium':
+      return {
+        tier,
+        label: 'BONUS',
+        glow: 'rgba(59, 130, 246, 0.34)',
+        accent: 'rgba(168, 85, 247, 0.8)',
+        gradient:
+          'linear-gradient(90deg, #93c5fd 0%, #60a5fa 30%, #a78bfa 65%, #c084fc 100%)',
+        particleColors: ['#ffffff', '#93c5fd', '#60a5fa', '#a78bfa'],
+        particleCount: 28,
+        shockwaveCount: 2,
+        orbitCount: 12,
+        burstDistance: 190,
+        textShadow: '0 0 28px rgba(96,165,250,0.85)',
+      };
+    case 'small':
+    default:
+      return {
+        tier,
+        label: 'LUCKY',
+        glow: 'rgba(125, 211, 252, 0.28)',
+        accent: 'rgba(59, 130, 246, 0.75)',
+        gradient:
+          'linear-gradient(90deg, #dbeafe 0%, #93c5fd 35%, #60a5fa 70%, #3b82f6 100%)',
+        particleColors: ['#ffffff', '#dbeafe', '#93c5fd', '#60a5fa'],
+        particleCount: 18,
+        shockwaveCount: 1,
+        orbitCount: 10,
+        burstDistance: 165,
+        textShadow: '0 0 22px rgba(96,165,250,0.75)',
+      };
+  }
+}
+
+function createCelebrationParticles(effect: RewardEffect, reward: number) {
+  return Array.from({ length: effect.particleCount }, (_, i) => {
+    const angle = (360 / effect.particleCount) * i + ((reward * 11 + i * 7) % 24) - 12;
+    const radians = (angle * Math.PI) / 180;
+    const distance =
+      effect.burstDistance + ((reward * 17 + i * 13) % 55) - 20;
+    const x = Math.cos(radians) * distance;
+    const y = Math.sin(radians) * distance;
+    const size = 4 + ((reward + i * 3) % 8);
+    const delay = (i % 10) * 0.035;
+    const duration = 0.8 + ((i + reward) % 5) * 0.18;
+    const rotate = ((i * 37) % 360) - 180;
+    const color = effect.particleColors[i % effect.particleColors.length];
+    const shape = i % 3;
+
+    return { i, x, y, size, delay, duration, rotate, color, shape };
+  });
+}
+
+function createOrbitDots(count: number) {
+  return Array.from({ length: count }, (_, i) => {
+    const angle = (360 / count) * i;
+    return { i, angle };
+  });
+}
+
+function RewardParticle({
+  x,
+  y,
+  size,
+  delay,
+  duration,
+  rotate,
+  color,
+  shape,
+}: {
+  x: number;
+  y: number;
+  size: number;
+  delay: number;
+  duration: number;
+  rotate: number;
+  color: string;
+  shape: number;
+}) {
+  if (shape === 0) {
+    return (
+      <motion.div
+        className="absolute left-1/2 top-1/2 pointer-events-none"
+        style={{
+          width: size,
+          height: size,
+          backgroundColor: color,
+          borderRadius: '9999px',
+          boxShadow: `0 0 ${size * 3}px ${color}`,
+          marginLeft: -size / 2,
+          marginTop: -size / 2,
+        }}
+        initial={{ x: 0, y: 0, opacity: 0, scale: 0 }}
+        animate={{
+          x,
+          y,
+          opacity: [0, 1, 1, 0],
+          scale: [0, 1.4, 0.7],
+        }}
+        transition={{ duration, delay, ease: 'easeOut' }}
+      />
+    );
+  }
+
+  if (shape === 1) {
+    return (
+      <motion.div
+        className="absolute left-1/2 top-1/2 pointer-events-none"
+        style={{
+          width: size,
+          height: size,
+          backgroundColor: color,
+          marginLeft: -size / 2,
+          marginTop: -size / 2,
+          rotate: '45deg',
+          boxShadow: `0 0 ${size * 2}px ${color}`,
+        }}
+        initial={{ x: 0, y: 0, opacity: 0, scale: 0, rotate: 0 }}
+        animate={{
+          x,
+          y,
+          opacity: [0, 1, 1, 0],
+          scale: [0, 1.5, 0],
+          rotate,
+        }}
+        transition={{ duration, delay, ease: 'easeOut' }}
+      />
+    );
+  }
+
+  return (
+    <motion.div
+      className="absolute left-1/2 top-1/2 pointer-events-none text-white font-black"
+      style={{
+        fontSize: size * 2,
+        lineHeight: 1,
+        color,
+        marginLeft: -size,
+        marginTop: -size,
+        textShadow: `0 0 ${size * 3}px ${color}`,
+      }}
+      initial={{ x: 0, y: 0, opacity: 0, scale: 0, rotate: 0 }}
+      animate={{
+        x,
+        y,
+        opacity: [0, 1, 1, 0],
+        scale: [0, 1.25, 0],
+        rotate: [0, rotate],
+      }}
+      transition={{ duration, delay, ease: 'easeOut' }}
+    >
+      ✦
+    </motion.div>
+  );
+}
+
 export default function RouletteModal({
   isOpen,
   onClose,
@@ -55,6 +268,18 @@ export default function RouletteModal({
   const [canReroll, setCanReroll] = useState(true);
 
   const segmentAngle = 360 / ROULETTE_SEGMENTS.length;
+  const rewardEffect = result !== null ? getRewardEffect(result) : null;
+
+  const celebrationParticles = useMemo(() => {
+    if (!rewardEffect || result === null) return [];
+    return createCelebrationParticles(rewardEffect, result);
+  }, [rewardEffect, result]);
+
+  const spinOrbitDots = useMemo(() => createOrbitDots(14), []);
+  const rewardOrbitDots = useMemo(
+    () => createOrbitDots(rewardEffect?.orbitCount ?? 0),
+    [rewardEffect]
+  );
 
   useEffect(() => {
     if (!isOpen) {
@@ -126,8 +351,30 @@ export default function RouletteModal({
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
           >
-            <div className="relative w-full max-w-lg rounded-3xl border border-purple-400/40 bg-gradient-to-b from-gray-900 to-black p-6 shadow-[0_0_80px_rgba(168,85,247,0.35)]">
-              <div className="mb-4 text-center">
+            <div className="relative w-full max-w-lg rounded-3xl border border-purple-400/40 bg-gradient-to-b from-gray-900 to-black p-6 shadow-[0_0_80px_rgba(168,85,247,0.35)] overflow-hidden">
+              <div className="pointer-events-none absolute inset-0">
+                <motion.div
+                  className="absolute left-1/2 top-1/2 h-[380px] w-[380px] -translate-x-1/2 -translate-y-1/2 rounded-full"
+                  style={{
+                    background:
+                      result !== null && rewardEffect
+                        ? `radial-gradient(circle, ${rewardEffect.glow} 0%, transparent 70%)`
+                        : 'radial-gradient(circle, rgba(168,85,247,0.18) 0%, transparent 70%)',
+                    filter: 'blur(18px)',
+                  }}
+                  animate={{
+                    scale: isSpinning ? [1, 1.15, 1] : result !== null ? [1, 1.22, 1] : 1,
+                    opacity: isSpinning ? [0.35, 0.75, 0.35] : result !== null ? [0.45, 1, 0.6] : 0.35,
+                  }}
+                  transition={{
+                    duration: isSpinning ? 1.2 : 1.6,
+                    repeat: Infinity,
+                    ease: 'easeInOut',
+                  }}
+                />
+              </div>
+
+              <div className="relative mb-4 text-center z-10">
                 <h2 className="text-3xl font-black tracking-tight text-white">
                   🎡 보너스 룰렛
                 </h2>
@@ -137,12 +384,123 @@ export default function RouletteModal({
               </div>
 
               <div className="relative mx-auto mb-6 h-80 w-80">
-                <div className="absolute -top-5 left-1/2 z-20 -translate-x-1/2 text-5xl text-yellow-300 drop-shadow-[0_0_20px_rgba(250,204,21,0.8)]">
+                <div className="absolute -top-5 left-1/2 z-30 -translate-x-1/2 text-5xl text-yellow-300 drop-shadow-[0_0_20px_rgba(250,204,21,0.8)]">
                   ▼
                 </div>
 
+                {isSpinning && (
+                  <>
+                    {spinOrbitDots.map((dot) => (
+                      <motion.div
+                        key={`spin-dot-${dot.i}`}
+                        className="absolute left-1/2 top-1/2 z-20 h-2.5 w-2.5 rounded-full"
+                        style={{
+                          background:
+                            dot.i % 2 === 0
+                              ? 'rgba(192,132,252,0.95)'
+                              : 'rgba(96,165,250,0.95)',
+                          boxShadow:
+                            dot.i % 2 === 0
+                              ? '0 0 16px rgba(192,132,252,0.95)'
+                              : '0 0 16px rgba(96,165,250,0.95)',
+                        }}
+                        initial={{ opacity: 0.3, scale: 0.8 }}
+                        animate={{
+                          opacity: [0.25, 1, 0.25],
+                          scale: [0.8, 1.35, 0.8],
+                          rotate: dot.angle + 360,
+                          x: Math.cos((dot.angle * Math.PI) / 180) * 170,
+                          y: Math.sin((dot.angle * Math.PI) / 180) * 170,
+                        }}
+                        transition={{
+                          duration: 0.95,
+                          repeat: Infinity,
+                          ease: 'linear',
+                          delay: dot.i * 0.03,
+                        }}
+                      />
+                    ))}
+
+                    <motion.div
+                      className="absolute inset-4 rounded-full border-2 border-fuchsia-300/30 z-10"
+                      animate={{ rotate: 360, scale: [1, 1.03, 1] }}
+                      transition={{ rotate: { duration: 1.8, repeat: Infinity, ease: 'linear' }, scale: { duration: 1.2, repeat: Infinity } }}
+                    />
+                  </>
+                )}
+
+                {result !== null && rewardEffect && (
+                  <div className="pointer-events-none absolute inset-[-40px] z-20">
+                    {Array.from({ length: rewardEffect.shockwaveCount }, (_, idx) => (
+                      <motion.div
+                        key={`shockwave-${idx}`}
+                        className="absolute left-1/2 top-1/2 rounded-full border"
+                        style={{
+                          borderColor: rewardEffect.accent,
+                          translateX: '-50%',
+                          translateY: '-50%',
+                        }}
+                        initial={{ width: 0, height: 0, opacity: 0 }}
+                        animate={{
+                          width: 220 + idx * 120,
+                          height: 220 + idx * 120,
+                          opacity: [0, 0.8, 0],
+                        }}
+                        transition={{
+                          duration: 0.95 + idx * 0.18,
+                          delay: idx * 0.12,
+                          ease: 'easeOut',
+                        }}
+                      />
+                    ))}
+
+                    {rewardOrbitDots.map((dot) => (
+                      <motion.div
+                        key={`reward-orbit-${dot.i}`}
+                        className="absolute left-1/2 top-1/2 z-10 rounded-full"
+                        style={{
+                          width: rewardEffect.tier === 'jackpot' ? 10 : 8,
+                          height: rewardEffect.tier === 'jackpot' ? 10 : 8,
+                          background: rewardEffect.particleColors[dot.i % rewardEffect.particleColors.length],
+                          boxShadow: `0 0 18px ${
+                            rewardEffect.particleColors[dot.i % rewardEffect.particleColors.length]
+                          }`,
+                        }}
+                        initial={{ opacity: 0, scale: 0 }}
+                        animate={{
+                          opacity: [0, 1, 0.3, 1],
+                          scale: [0.5, 1.15, 0.8, 1.1],
+                          rotate: dot.angle + 360,
+                          x: Math.cos((dot.angle * Math.PI) / 180) * 155,
+                          y: Math.sin((dot.angle * Math.PI) / 180) * 155,
+                        }}
+                        transition={{
+                          duration: rewardEffect.tier === 'jackpot' ? 1.2 : 1.45,
+                          repeat: Infinity,
+                          ease: 'linear',
+                          delay: dot.i * 0.04,
+                        }}
+                      />
+                    ))}
+
+                    {celebrationParticles.map((particle) => (
+                      <RewardParticle
+                        key={`particle-${particle.i}`}
+                        x={particle.x}
+                        y={particle.y}
+                        size={particle.size}
+                        delay={particle.delay}
+                        duration={particle.duration}
+                        rotate={particle.rotate}
+                        color={particle.color}
+                        shape={particle.shape}
+                      />
+                    ))}
+                  </div>
+                )}
+
                 <motion.div
-                  className="absolute inset-0 rounded-full"
+                  className="absolute inset-0 rounded-full z-10"
                   animate={{ rotate: rotation }}
                   transition={{ duration: 4.3, ease: [0.08, 0.72, 0.16, 1] }}
                 >
@@ -186,19 +544,54 @@ export default function RouletteModal({
                   <div className="absolute inset-0 rounded-full ring-8 ring-white/10" />
                 </motion.div>
 
-                <div className="absolute left-1/2 top-1/2 z-10 h-14 w-14 -translate-x-1/2 -translate-y-1/2 rounded-full border-4 border-yellow-200 bg-gradient-to-br from-yellow-300 to-orange-500 shadow-[0_0_40px_rgba(251,191,36,0.9)]" />
+                <motion.div
+                  className="absolute left-1/2 top-1/2 z-20 h-14 w-14 -translate-x-1/2 -translate-y-1/2 rounded-full border-4 border-yellow-200 bg-gradient-to-br from-yellow-300 to-orange-500 shadow-[0_0_40px_rgba(251,191,36,0.9)]"
+                  animate={
+                    isSpinning
+                      ? {
+                          scale: [1, 1.12, 1],
+                          boxShadow: [
+                            '0 0 30px rgba(251,191,36,0.7)',
+                            '0 0 54px rgba(251,191,36,1)',
+                            '0 0 30px rgba(251,191,36,0.7)',
+                          ],
+                        }
+                      : {}
+                  }
+                  transition={{ duration: 0.8, repeat: Infinity, ease: 'easeInOut' }}
+                />
               </div>
 
-              <div className="text-center">
-                {result !== null && (
+              <div className="relative text-center z-10">
+                {result !== null && rewardEffect && (
                   <motion.div
                     className="mb-4"
-                    initial={{ opacity: 0, scale: 0.6 }}
-                    animate={{ opacity: 1, scale: [0.9, 1.15, 1] }}
-                    transition={{ duration: 0.6 }}
+                    initial={{ opacity: 0, scale: 0.55, y: 10 }}
+                    animate={{ opacity: 1, scale: [0.9, 1.18, 1], y: 0 }}
+                    transition={{ duration: 0.75, ease: 'easeOut' }}
                   >
+                    <motion.p
+                      className="mb-2 text-xs font-black tracking-[0.35em]"
+                      style={{
+                        color: rewardEffect.particleColors[0],
+                        textShadow: rewardEffect.textShadow,
+                      }}
+                      initial={{ opacity: 0, letterSpacing: '0.15em' }}
+                      animate={{ opacity: 1, letterSpacing: '0.35em' }}
+                      transition={{ duration: 0.45, delay: 0.08 }}
+                    >
+                      {rewardEffect.label}
+                    </motion.p>
+
                     <p className="text-sm text-gray-300">🎉 축하합니다! 획득 보상</p>
-                    <p className="text-5xl font-black text-transparent bg-gradient-to-r from-yellow-300 via-orange-400 to-red-500 bg-clip-text drop-shadow-[0_0_30px_rgba(249,115,22,0.8)]">
+
+                    <p
+                      className="text-5xl font-black text-transparent bg-clip-text"
+                      style={{
+                        backgroundImage: rewardEffect.gradient,
+                        textShadow: rewardEffect.textShadow,
+                      }}
+                    >
                       +{result}회
                     </p>
                   </motion.div>
