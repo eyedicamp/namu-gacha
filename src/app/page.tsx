@@ -14,9 +14,22 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [pullCount, setPullCount] = useState(0);
   const [remaining, setRemaining] = useState<number>(10);
+  const [isDevMode, setIsDevMode] = useState(false);
+
+  // ✅ 개발 모드 체크 (로컬에서만 무제한)
+  useEffect(() => {
+    const isDev = process.env.NODE_ENV === 'development' || window.location.hostname === 'localhost';
+    setIsDevMode(isDev);
+  }, []);
 
   // 로컬스토리지에서 오늘 뽑기 횟수 불러오기
   useEffect(() => {
+    if (isDevMode) {
+      // 개발 모드에서는 항상 무제한
+      setRemaining(999);
+      return;
+    }
+
     const today = new Date().toISOString().split('T')[0];
     const stored = localStorage.getItem('gacha_daily');
     
@@ -34,7 +47,7 @@ export default function Home() {
     } else {
       localStorage.setItem('gacha_daily', JSON.stringify({ date: today, count: 0 }));
     }
-  }, []);
+  }, [isDevMode]);
 
   const saveToHistory = (gachaResult: GachaResult) => {
     const history = localStorage.getItem('gacha_history');
@@ -57,7 +70,7 @@ export default function Home() {
   };
 
   const handleGacha = async () => {
-    if (remaining <= 0) {
+    if (!isDevMode && remaining <= 0) {
       setError('오늘의 뽑기 횟수를 모두 사용했습니다! 내일 다시 도전하세요.');
       return;
     }
@@ -82,13 +95,16 @@ export default function Home() {
       // 히스토리에 저장
       saveToHistory(data);
       
-      // 로컬스토리지 업데이트
-      const today = new Date().toISOString().split('T')[0];
-      const newCount = pullCount + 1;
-      localStorage.setItem('gacha_daily', JSON.stringify({ date: today, count: newCount }));
+      // 개발 모드가 아닐 때만 카운트 증가
+      if (!isDevMode) {
+        const today = new Date().toISOString().split('T')[0];
+        const newCount = pullCount + 1;
+        localStorage.setItem('gacha_daily', JSON.stringify({ date: today, count: newCount }));
+        
+        setPullCount(newCount);
+        setRemaining(10 - newCount);
+      }
       
-      setPullCount(newCount);
-      setRemaining(10 - newCount);
       setPhase('result');
       
     } catch {
@@ -98,7 +114,8 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center p-6 overflow-hidden">
+    <main className="min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center p-6 overflow-hidden pt-24">
+      {/* ✅ Navigation 추가 (상단 고정) */}
       <Navigation />
       
       {/* 타이틀 */}
@@ -119,7 +136,7 @@ export default function Home() {
         나무위키 랜덤 문서 뽑기
       </motion.p>
 
-      {/* 남은 횟수 표시 */}
+      {/* ✅ 남은 기회 표시 (텍스트 변경 + 개발 모드 표시) */}
       <motion.div
         className="mb-4 px-6 py-3 bg-white/10 backdrop-blur-sm rounded-xl border border-white/20"
         initial={{ opacity: 0, scale: 0.9 }}
@@ -127,30 +144,36 @@ export default function Home() {
         transition={{ delay: 0.4 }}
       >
         <p className="text-sm text-gray-300">
-          오늘 남은 뽑기: <span className="text-xl font-bold text-yellow-400">{remaining}</span> / 10
+          {isDevMode ? (
+            <span className="text-green-400 font-bold">🔧 개발 모드 (무제한)</span>
+          ) : (
+            <>
+              남은 기회: <span className="text-xl font-bold text-yellow-400">{remaining}</span> / 10
+            </>
+          )}
         </p>
       </motion.div>
 
       {/* 뽑기 버튼 */}
       <motion.button
         onClick={handleGacha}
-        disabled={phase === 'loading' || remaining <= 0}
+        disabled={phase === 'loading' || (!isDevMode && remaining <= 0)}
         className={`
           px-8 py-4 rounded-2xl text-xl font-bold
           transition-all duration-300 cursor-pointer
-          ${phase === 'loading' || remaining <= 0
+          ${phase === 'loading' || (!isDevMode && remaining <= 0)
             ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
             : 'bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500'
           }
         `}
-        whileHover={phase !== 'loading' && remaining > 0 ? { scale: 1.05 } : {}}
-        whileTap={phase !== 'loading' && remaining > 0 ? { scale: 0.95 } : {}}
+        whileHover={phase !== 'loading' && (isDevMode || remaining > 0) ? { scale: 1.05 } : {}}
+        whileTap={phase !== 'loading' && (isDevMode || remaining > 0) ? { scale: 0.95 } : {}}
       >
-        {phase === 'loading' ? '뽑는 중...' : remaining <= 0 ? '오늘 뽑기 종료' : '🎲 뽑기!'}
+        {phase === 'loading' ? '뽑는 중...' : (!isDevMode && remaining <= 0) ? '오늘 뽑기 종료' : '🎲 뽑기!'}
       </motion.button>
 
       {/* 뽑기 카운터 */}
-      {pullCount > 0 && (
+      {!isDevMode && pullCount > 0 && (
         <motion.p
           className="mt-3 text-xs text-gray-600"
           initial={{ opacity: 0 }}

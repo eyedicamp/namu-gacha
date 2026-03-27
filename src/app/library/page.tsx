@@ -6,14 +6,14 @@ import { GachaResult } from '@/types/gacha';
 import LibraryCard from '@/components/LibraryCard';
 import Navigation from '@/components/Navigation';
 
-type FilterType = 'all' | 'Normal' | 'Rare' | 'Epic' | 'Legendary' | 'Mythic'; // ✅ Common → Normal
+type FilterType = 'all' | 'Normal' | 'Rare' | 'Epic' | 'Legendary' | 'Mythic';
 
 export default function LibraryPage() {
   const [history, setHistory] = useState<GachaResult[]>([]);
   const [filter, setFilter] = useState<FilterType>('all');
   const [stats, setStats] = useState({
     total: 0,
-    Normal: 0,  // ✅ Common → Normal
+    Normal: 0,
     Rare: 0,
     Epic: 0,
     Legendary: 0,
@@ -29,7 +29,7 @@ export default function LibraryPage() {
       // 통계 계산
       const newStats = {
         total: items.length,
-        Normal: items.filter(i => i.rarity === 'Normal').length,  // ✅ Common → Normal
+        Normal: items.filter(i => i.rarity === 'Normal').length,
         Rare: items.filter(i => i.rarity === 'Rare').length,
         Epic: items.filter(i => i.rarity === 'Epic').length,
         Legendary: items.filter(i => i.rarity === 'Legendary').length,
@@ -42,21 +42,6 @@ export default function LibraryPage() {
   const filteredHistory = filter === 'all' 
     ? history 
     : history.filter(item => item.rarity === filter);
-
-  const clearHistory = () => {
-    if (confirm('정말로 모든 기록을 삭제하시겠습니까?')) {
-      localStorage.removeItem('gacha_history');
-      setHistory([]);
-      setStats({
-        total: 0,
-        Normal: 0,  // ✅ Common → Normal
-        Rare: 0,
-        Epic: 0,
-        Legendary: 0,
-        Mythic: 0,
-      });
-    }
-  };
 
   return (
     <main className="min-h-screen bg-gray-950 text-white p-6 pt-24">
@@ -85,8 +70,8 @@ export default function LibraryPage() {
             <p className="text-xs text-gray-400">전체</p>
           </div>
           <div className="bg-gray-600/20 backdrop-blur-sm rounded-xl p-4 border border-gray-500/30 text-center">
-            <p className="text-2xl font-bold">{stats.Normal}</p>  {/* ✅ Common → Normal */}
-            <p className="text-xs text-gray-400">⚪ Normal</p>  {/* ✅ Common → Normal */}
+            <p className="text-2xl font-bold">{stats.Normal}</p>
+            <p className="text-xs text-gray-400">⚪ Normal</p>
           </div>
           <div className="bg-blue-600/20 backdrop-blur-sm rounded-xl p-4 border border-blue-500/30 text-center">
             <p className="text-2xl font-bold">{stats.Rare}</p>
@@ -106,14 +91,14 @@ export default function LibraryPage() {
           </div>
         </motion.div>
 
-        {/* 필터 */}
+        {/* ✅ 필터 (기록삭제 버튼 제거) */}
         <motion.div
           className="flex flex-wrap gap-2 mb-6 justify-center"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.2 }}
         >
-          {(['all', 'Normal', 'Rare', 'Epic', 'Legendary', 'Mythic'] as FilterType[]).map((type) => (  // ✅ Common → Normal
+          {(['all', 'Normal', 'Rare', 'Epic', 'Legendary', 'Mythic'] as FilterType[]).map((type) => (
             <button
               key={type}
               onClick={() => setFilter(type)}
@@ -126,15 +111,6 @@ export default function LibraryPage() {
               {type === 'all' ? '전체' : type}
             </button>
           ))}
-          
-          {history.length > 0 && (
-            <button
-              onClick={clearHistory}
-              className="px-4 py-2 rounded-full text-sm font-medium bg-red-600/20 text-red-400 hover:bg-red-600/30 transition-all ml-auto"
-            >
-              🗑️ 전체 삭제
-            </button>
-          )}
         </motion.div>
 
         {/* 카드 그리드 */}
