@@ -1,6 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import type { TargetAndTransition, Transition } from 'framer-motion';
 import { GachaResult, GachaRarity, RARITY_CONFIG } from '@/types/gacha';
 import RarityParticles from './RarityParticles';
 
@@ -39,9 +40,9 @@ const BACK_GLOW: Record<GachaRarity, {
 };
 
 const entranceVariants: Record<GachaRarity, {
-  initial: object;
-  animate: object;
-  transition: object;
+  initial: TargetAndTransition;
+  animate: TargetAndTransition;
+  transition: Transition;
 }> = {
   Normal: {
     initial: { opacity: 0, y: 30 },
@@ -70,7 +71,7 @@ const entranceVariants: Record<GachaRarity, {
   },
 };
 
-const glowVariants: Record<string, object> = {
+const glowVariants: Record<string, TargetAndTransition> = {
   Normal: {},
   Rare: {
     boxShadow: [
