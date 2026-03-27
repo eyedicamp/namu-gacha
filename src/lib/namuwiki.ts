@@ -2,232 +2,132 @@
 import { GachaResult } from '@/types/gacha';
 import { determineRarity } from './rarity';
 
-// 나무위키 OpenSearch API (상대적으로 안정적)
-const NAMU_SEARCH_API = 'https://namu.wiki/api/search';
-const NAMU_RAW_API = 'https://namu.wiki/raw';
+const NAMU_HEADERS: Record<string, string> = {
+  'User-Agent':
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+  Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+};
 
-// 랜덤 키워드 풀 (다양한 주제에서 검색 시드로 사용)
-const RANDOM_SEEDS = [
-  '대한민국', '역사', '과학', '수학', '물리', '화학', '생물',
-  '컴퓨터', '프로그래밍', '게임', '애니메이션', '만화', '영화',
-  '음악', '드라마', '소설', '문학', '철학', '경제', '정치',
-  '지리', '천문', '우주', '동물', '식물', '음식', '요리',
-  '스포츠', '축구', '야구', '농구', '올림픽', '월드컵',
-  '서울', '부산', '대구', '인천', '광주', '대전', '울산',
-  '일본', '중국', '미국', '영국', '프랑스', '독일', '이탈리아',
-  '러시아', '호주', '캐나다', '브라질', '인도', '멕시코',
-  '삼국지', '조선', '고려', '백제', '신라', '고구려',
-  '포켓몬', '마리오', '젤다', '파이널판타지', '리그오브레전드',
-  '원피스', '나루토', '블리치', '진격의거인', '귀멸의칼날',
-  '아이돌', '방탄소년단', '블랙핑크', '뉴진스',
-  '인터넷', '유튜브', '트위치', '디스코드',
-  '자동차', '비행기', '기차', '선박', '로켓',
-  '태양계', '은하', '블랙홀', '별자리',
-  '공룡', '포유류', '곤충', '어류', '조류',
-  '피아노', '기타', '바이올린', '드럼',
-  '커피', '라면', '치킨', '피자', '햄버거', '초콜릿',
-  '서울대학교', '연세대학교', '고려대학교', 'KAIST',
-  '넷플릭스', '디즈니', '마블', 'DC코믹스',
-  '삼성', '현대', 'LG', 'SK', '카카오', '네이버',
-  '위키', '나무위키', '백과사전',
-  '수영', '달리기', '등산', '자전거', '스키',
-  '강아지', '고양이', '토끼', '햄스터', '앵무새',
-  '봄', '여름', '가을', '겨울', '태풍', '지진', '화산',
-];
-
-function getRandomSeeds(count: number): string[] {
-  const shuffled = [...RANDOM_SEEDS].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, count);
-}
-
-function escapeRegExp(str: string): string {
-  let result = '';
-  const specials = new Set([
-    '.', '*', '+', '?', '^', '$', '{', '}',
-    '(', ')', '|', '[', ']', '\\'
-  ]);
-  for (const ch of str) {
-    if (specials.has(ch)) {
-      result += '\\' + ch;
-    } else {
-      result += ch;
-    }
-  }
-  return result;
-}
-
+// ─────────────────────────────────────────────
+// 메인 함수
+// ─────────────────────────────────────────────
 export async function fetchRandomDocument(): Promise<GachaResult> {
-  const headers: Record<string, string> = {
-    'User-Agent':
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
-  };
+  const MAX_ROUNDS = 5;       // 최대 5라운드 시도
+  const TITLES_PER_ROUND = 10; // 라운드당 10개 제목
 
-  // ── 전략 1: namu.wiki/random 시도 ──
-  try {
-    const title = await fetchRandomTitle(headers);
-    if (title) {
-      return await buildGachaResult(title, headers);
-    }
-  } catch {
-    // 전략 2로 fallback
-  }
-
-  // ── 전략 2: 검색 API로 랜덤 문서 찾기 ──
-  try {
-    const title = await fetchRandomViaSearch(headers);
-    if (title) {
-      return await buildGachaResult(title, headers);
-    }
-  } catch {
-    // 전략 3으로 fallback
-  }
-
-  // ── 전략 3: 시드 키워드에서 랜덤 선택 후 raw 페이지 시도 ──
-  const seeds = getRandomSeeds(5);
-  for (const seed of seeds) {
+  for (let round = 0; round < MAX_ROUNDS; round++) {
+    // 매 라운드마다 위키백과에서 새로운 랜덤 제목 10개 가져오기
+    let titles: string[];
     try {
-      return await buildGachaResult(seed, headers);
+      titles = await getRandomTitlesFromWikipedia(TITLES_PER_ROUND);
     } catch {
-      continue;
+      continue; // 위키백과 API 실패 시 다음 라운드
     }
-  }
 
-  throw new Error('모든 방법으로 문서를 가져오는 데 실패했습니다.');
-}
-
-/**
- * 전략 1: /random 리다이렉트에서 제목 추출
- */
-async function fetchRandomTitle(
-  headers: Record<string, string>
-): Promise<string | null> {
-  const res = await fetch('https://namu.wiki/random', {
-    redirect: 'follow',
-    headers,
-    signal: AbortSignal.timeout(5000),
-  });
-
-  if (!res.ok) return null;
-
-  const finalUrl = res.url;
-  const titleMatch = finalUrl.match(/\/w\/(.+)/);
-  if (!titleMatch) return null;
-
-  return decodeURIComponent(titleMatch[1]).replace(/_/g, ' ');
-}
-
-/**
- * 전략 2: 검색 API로 랜덤 문서 찾기
- */
-async function fetchRandomViaSearch(
-  headers: Record<string, string>
-): Promise<string | null> {
-  const seed = getRandomSeeds(1)[0];
-
-  // 나무위키 검색 페이지를 파싱
-  const searchUrl = `https://namu.wiki/Search?q=${encodeURIComponent(seed)}&searchTarget=title`;
-  const res = await fetch(searchUrl, {
-    headers,
-    signal: AbortSignal.timeout(5000),
-  });
-
-  if (!res.ok) return null;
-
-  const html = await res.text();
-
-  // 검색 결과에서 문서 링크 추출
-  const linkPattern = /href="\/w\/([^"]+)"/g;
-  const titles: string[] = [];
-  let match;
-
-  while ((match = linkPattern.exec(html)) !== null) {
-    try {
-      const decoded = decodeURIComponent(match[1]).replace(/_/g, ' ');
-      // 특수 페이지 제외
-      if (
-        !decoded.startsWith('분류:') &&
-        !decoded.startsWith('틀:') &&
-        !decoded.startsWith('나무위키:') &&
-        !decoded.startsWith('파일:') &&
-        !decoded.includes(':대문')
-      ) {
-        titles.push(decoded);
+    // 각 제목으로 나무위키 시도
+    for (const title of titles) {
+      try {
+        const result = await tryNamuWiki(title);
+        if (result) return result; // 나무위키에 있으면 즉시 반환!
+      } catch {
+        continue;
       }
-    } catch {
-      continue;
     }
+    // 10개 전부 나무위키에 없으면 → 다음 라운드에서 새로운 10개 시도
   }
 
-  if (titles.length === 0) return null;
-
-  // 랜덤으로 하나 선택
-  return titles[Math.floor(Math.random() * titles.length)];
+  // 5라운드 × 10개 = 50개 시도 후에도 실패 (거의 불가능)
+  throw new Error('문서를 가져오는 데 실패했습니다. 다시 시도해주세요.');
 }
 
-/**
- * 문서 제목으로 GachaResult 생성
- */
-async function buildGachaResult(
-  title: string,
-  headers: Record<string, string>
-): Promise<GachaResult> {
+// ─────────────────────────────────────────────
+// 위키백과 랜덤 API로 진짜 랜덤 제목 획득
+// ─────────────────────────────────────────────
+async function getRandomTitlesFromWikipedia(count: number): Promise<string[]> {
+  const url =
+    `https://ko.wikipedia.org/w/api.php?` +
+    new URLSearchParams({
+      action: 'query',
+      list: 'random',
+      rnnamespace: '0',
+      rnlimit: String(count),
+      format: 'json',
+      origin: '*',
+    });
+
+  const res = await fetch(url, {
+    headers: { 'User-Agent': 'NamuGacha/1.0' },
+    signal: AbortSignal.timeout(5000),
+  });
+
+  if (!res.ok) throw new Error('위키백과 랜덤 API 실패');
+
+  const data = await res.json();
+  return data.query.random.map((item: { title: string }) => item.title);
+}
+
+// ─────────────────────────────────────────────
+// 나무위키에서 문서 내용 가져오기
+// ─────────────────────────────────────────────
+async function tryNamuWiki(title: string): Promise<GachaResult | null> {
   let rawContent = '';
 
-  // raw 페이지에서 나무마크 원문 가져오기
+  // 방법 A: /raw/ 엔드포인트
   try {
     const rawUrl = `https://namu.wiki/raw/${encodeURIComponent(title)}`;
     const res = await fetch(rawUrl, {
-      headers,
+      headers: NAMU_HEADERS,
       signal: AbortSignal.timeout(5000),
     });
 
     if (res.ok) {
       const text = await res.text();
-
-      // HTML이 아닌 실제 나무마크 텍스트인지 확인
-      if (!text.startsWith('<!') && !text.startsWith('<html')) {
+      if (
+        !text.startsWith('<!') &&
+        !text.startsWith('<html') &&
+        text.length > 10
+      ) {
         rawContent = text;
       }
     }
   } catch {
-    // raw 실패 시 빈 문자열
+    // 방법 B로
   }
 
-  // raw도 실패하면 API 시도
+  // 방법 B: en.namu.wiki API
   if (!rawContent) {
     try {
       const apiUrl = `https://en.namu.wiki/api/doc/${encodeURIComponent(title)}`;
-      const apiRes = await fetch(apiUrl, {
-        headers,
+      const res = await fetch(apiUrl, {
+        headers: NAMU_HEADERS,
         signal: AbortSignal.timeout(5000),
       });
 
-      if (apiRes.ok) {
-        const contentType = apiRes.headers.get('content-type') || '';
+      if (res.ok) {
+        const contentType = res.headers.get('content-type') || '';
         if (contentType.includes('application/json')) {
-          const apiData = await apiRes.json();
-          if (apiData.content && !apiData.content.startsWith('<!')) {
-            rawContent = apiData.content;
+          const data = await res.json();
+          if (
+            data.content &&
+            !data.content.startsWith('<!') &&
+            data.content.length > 10
+          ) {
+            rawContent = data.content;
           }
         }
       }
     } catch {
-      // API도 실패
+      // 실패
     }
   }
 
-  // 콘텐츠가 전혀 없으면 에러
-  if (!rawContent || rawContent.length < 10) {
-    throw new Error(`문서 "${title}"의 내용을 가져올 수 없습니다.`);
-  }
+  // 나무위키에 문서가 없으면 null 반환 → 다음 제목 시도
+  if (!rawContent) return null;
 
   const contentLength = rawContent.length;
-
   const linkMatches = rawContent.match(/$$$$/g);
   const linkCount = linkMatches ? linkMatches.length : 0;
-
   const summary = extractSummary(rawContent, title);
   const rarity = determineRarity(contentLength, linkCount);
 
@@ -241,11 +141,27 @@ async function buildGachaResult(
   };
 }
 
-/**
- * 나무마크 원문에서 요약 추출
- */
+// ─────────────────────────────────────────────
+// 유틸리티 함수들
+// ─────────────────────────────────────────────
+
+function escapeRegExp(str: string): string {
+  let result = '';
+  const specials = new Set([
+    '.', '*', '+', '?', '^', '$', '{', '}',
+    '(', ')', '|', '[', ']', '\\',
+  ]);
+  for (const ch of str) {
+    if (specials.has(ch)) {
+      result += '\\' + ch;
+    } else {
+      result += ch;
+    }
+  }
+  return result;
+}
+
 function extractSummary(raw: string, title: string): string {
-  // 전략 1: "== 개요 ==" 섹션
   const overviewMatch = raw.match(
     /==\s*개요\s*==\s*\n([\s\S]*?)(?=\n==\s*[^=]|$)/
   );
@@ -254,7 +170,6 @@ function extractSummary(raw: string, title: string): string {
     if (text.length > 10) return trimSummary(text);
   }
 
-  // 전략 2: "== 소개/설명/정의 ==" 섹션
   const altMatch = raw.match(
     /==\s*(소개|설명|정의|기본 정보)\s*==\s*\n([\s\S]*?)(?=\n==\s*[^=]|$)/
   );
@@ -263,7 +178,6 @@ function extractSummary(raw: string, title: string): string {
     if (text.length > 10) return trimSummary(text);
   }
 
-  // 전략 3: 첫 번째 섹션 이전 도입부
   const introMatch = raw.match(/^([\s\S]*?)(?=\n==\s*[^=])/);
   if (introMatch) {
     const text = stripNamuMarkup(introMatch[1]).trim();
@@ -271,15 +185,11 @@ function extractSummary(raw: string, title: string): string {
     if (cleaned.length > 15) return trimSummary(cleaned);
   }
 
-  // 전략 4: 전체에서 추출
   const fullText = stripNamuMarkup(raw);
   const cleaned = removeMetaJunk(fullText, title);
   return trimSummary(cleaned);
 }
 
-/**
- * 나무마크 문법 제거
- */
 function stripNamuMarkup(raw: string): string {
   return raw
     .replace(/<[^>]+>/g, '')
@@ -306,9 +216,6 @@ function stripNamuMarkup(raw: string): string {
     .trim();
 }
 
-/**
- * 메타 정보 제거
- */
 function removeMetaJunk(text: string, title: string): string {
   const escapedTitle = escapeRegExp(title);
   return text
@@ -332,9 +239,6 @@ function removeMetaJunk(text: string, title: string): string {
     .trim();
 }
 
-/**
- * 요약을 150자 이내로 다듬기
- */
 function trimSummary(text: string): string {
   if (!text || text.length < 5) {
     return '요약을 불러올 수 없습니다.';
@@ -347,7 +251,8 @@ function trimSummary(text: string): string {
 
   const meaningful = sentences.filter((s) => {
     if (s.length < 10) return false;
-    if (/^(최근|편집|토론|역사|분류|특수|로그인|해당|이\s*문서)/.test(s)) return false;
+    if (/^(최근|편집|토론|역사|분류|특수|로그인|해당|이\s*문서)/.test(s))
+      return false;
     return true;
   });
 
