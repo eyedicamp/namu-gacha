@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 
 interface RouletteModalProps {
@@ -15,6 +15,25 @@ const SEGMENT_COLORS = [
   '#a855f7', '#f59e0b', '#ef4444', '#f97316', '#3b82f6', '#8b5cf6',
 ] as const;
 
+const WHEEL_SIZE = 320;
+const RADIUS = WHEEL_SIZE / 2;
+const CENTER = WHEEL_SIZE / 2;
+
+function polarToCartesian(angleDeg: number, radius: number) {
+  const rad = (angleDeg * Math.PI) / 180;
+  return {
+    x: CENTER + radius * Math.cos(rad),
+    y: CENTER + radius * Math.sin(rad),
+  };
+}
+
+function sectorPath(startDeg: number, endDeg: number) {
+  const p1 = polarToCartesian(startDeg, RADIUS);
+  const p2 = polarToCartesian(endDeg, RADIUS);
+
+  return `M ${CENTER} ${CENTER} L ${p1.x} ${p1.y} A ${RADIUS} ${RADIUS} 0 0 1 ${p2.x} ${p2.y} Z`;
+}
+
 export default function RouletteModal({ isOpen, onClose, onReward }: RouletteModalProps) {
   const [rotation, setRotation] = useState(0);
   const [isSpinning, setIsSpinning] = useState(false);
@@ -23,22 +42,11 @@ export default function RouletteModal({ isOpen, onClose, onReward }: RouletteMod
 
   const segmentAngle = 360 / ROULETTE_SEGMENTS.length;
 
-
   const resetState = () => {
     setResult(null);
     setCanReroll(true);
     setIsSpinning(false);
   };
-
-  const wheelBackground = useMemo(() => {
-    const parts = ROULETTE_SEGMENTS.map((_, i) => {
-      const start = i * segmentAngle;
-      const end = start + segmentAngle;
-      return `${SEGMENT_COLORS[i % SEGMENT_COLORS.length]} ${start}deg ${end}deg`;
-    });
-
-    return `conic-gradient(from -90deg, ${parts.join(', ')})`;
-  }, [segmentAngle]);
 
   const handleClose = () => {
     if (isSpinning) return;
@@ -50,15 +58,20 @@ export default function RouletteModal({ isOpen, onClose, onReward }: RouletteMod
     setResult(null);
     setIsSpinning(true);
 
-    // 선택된 칸의 "중심"이 포인터(상단) 위치에 오도록 회전값 계산
-    const targetOffset = chosenIndex * segmentAngle + segmentAngle / 2;
-    const spinAngle = rotation + 360 * 6 - targetOffset;
-    setRotation(spinAngle);
+    // 선택 칸 중심 각도 (룰렛 원본 기준, 0도는 오른쪽)
+    const centerAngle = -90 + chosenIndex * segmentAngle + segmentAngle / 2;
+
+    setRotation((prev) => {
+      const normalizedPrev = ((prev % 360) + 360) % 360;
+      const targetAbsolute = ((-90 - centerAngle) % 360 + 360) % 360;
+      const deltaToTarget = (targetAbsolute - normalizedPrev + 360) % 360;
+      return prev + 360 * 6 + deltaToTarget;
+    });
 
     window.setTimeout(() => {
       setResult(ROULETTE_SEGMENTS[chosenIndex]);
       setIsSpinning(false);
-    }, 4200);
+    }, 4300);
   };
 
   const handleSpin = () => {
@@ -110,18 +123,34 @@ export default function RouletteModal({ isOpen, onClose, onReward }: RouletteMod
                 </div>
 
                 <motion.div
-                  className="absolute inset-0 rounded-full border-8 border-white/25 shadow-[0_0_50px_rgba(59,130,246,0.45)]"
-                  style={{ background: wheelBackground }}
+                  className="absolute inset-0 rounded-full"
                   animate={{ rotate: rotation }}
-                  transition={{ duration: 4.2, ease: [0.08, 0.72, 0.16, 1] }}
+                  transition={{ duration: 4.3, ease: [0.08, 0.72, 0.16, 1] }}
                 >
+                  <svg viewBox={`0 0 ${WHEEL_SIZE} ${WHEEL_SIZE}`} className="h-full w-full rounded-full">
+                    {ROULETTE_SEGMENTS.map((_, idx) => {
+                      const start = -90 + idx * segmentAngle;
+                      const end = start + segmentAngle;
+
+                      return (
+                        <path
+                          key={`sector-${idx}`}
+                          d={sectorPath(start, end)}
+                          fill={SEGMENT_COLORS[idx % SEGMENT_COLORS.length]}
+                          stroke="rgba(255,255,255,0.18)"
+                          strokeWidth="1.5"
+                        />
+                      );
+                    })}
+                  </svg>
+
                   {ROULETTE_SEGMENTS.map((value, idx) => {
                     const angle = idx * segmentAngle + segmentAngle / 2;
                     return (
                       <div
                         key={`${value}-${idx}`}
                         className="absolute left-1/2 top-1/2"
-                        style={{ transform: `rotate(${angle}deg) translateY(-135px) rotate(${-angle}deg)` }}
+                        style={{ transform: `rotate(${angle}deg) translateY(-130px) rotate(${-angle}deg)` }}
                       >
                         <span className="block -translate-x-1/2 -translate-y-1/2 text-sm font-black text-white drop-shadow-[0_0_8px_rgba(0,0,0,0.95)]">
                           +{value}
@@ -129,6 +158,8 @@ export default function RouletteModal({ isOpen, onClose, onReward }: RouletteMod
                       </div>
                     );
                   })}
+
+                  <div className="absolute inset-0 rounded-full ring-8 ring-white/10" />
                 </motion.div>
 
                 <div className="absolute left-1/2 top-1/2 z-10 h-14 w-14 -translate-x-1/2 -translate-y-1/2 rounded-full border-4 border-yellow-200 bg-gradient-to-br from-yellow-300 to-orange-500 shadow-[0_0_40px_rgba(251,191,36,0.9)]" />
