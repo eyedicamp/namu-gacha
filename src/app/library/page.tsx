@@ -6,14 +6,14 @@ import { GachaResult } from '@/types/gacha';
 import LibraryCard from '@/components/LibraryCard';
 import Navigation from '@/components/Navigation';
 
-type FilterType = 'all' | 'Common' | 'Rare' | 'Epic' | 'Legendary' | 'Mythic';
+type FilterType = 'all' | 'Normal' | 'Rare' | 'Epic' | 'Legendary' | 'Mythic'; // ✅ Common → Normal
 
 export default function LibraryPage() {
   const [history, setHistory] = useState<GachaResult[]>([]);
   const [filter, setFilter] = useState<FilterType>('all');
   const [stats, setStats] = useState({
     total: 0,
-    Common: 0,
+    Normal: 0,  // ✅ Common → Normal
     Rare: 0,
     Epic: 0,
     Legendary: 0,
@@ -29,7 +29,7 @@ export default function LibraryPage() {
       // 통계 계산
       const newStats = {
         total: items.length,
-        Common: items.filter(i => i.rarity === 'Common').length,
+        Normal: items.filter(i => i.rarity === 'Normal').length,  // ✅ Common → Normal
         Rare: items.filter(i => i.rarity === 'Rare').length,
         Epic: items.filter(i => i.rarity === 'Epic').length,
         Legendary: items.filter(i => i.rarity === 'Legendary').length,
@@ -49,7 +49,7 @@ export default function LibraryPage() {
       setHistory([]);
       setStats({
         total: 0,
-        Common: 0,
+        Normal: 0,  // ✅ Common → Normal
         Rare: 0,
         Epic: 0,
         Legendary: 0,
@@ -85,8 +85,8 @@ export default function LibraryPage() {
             <p className="text-xs text-gray-400">전체</p>
           </div>
           <div className="bg-gray-600/20 backdrop-blur-sm rounded-xl p-4 border border-gray-500/30 text-center">
-            <p className="text-2xl font-bold">{stats.Common}</p>
-            <p className="text-xs text-gray-400">⚪ Common</p>
+            <p className="text-2xl font-bold">{stats.Normal}</p>  {/* ✅ Common → Normal */}
+            <p className="text-xs text-gray-400">⚪ Normal</p>  {/* ✅ Common → Normal */}
           </div>
           <div className="bg-blue-600/20 backdrop-blur-sm rounded-xl p-4 border border-blue-500/30 text-center">
             <p className="text-2xl font-bold">{stats.Rare}</p>
@@ -113,7 +113,7 @@ export default function LibraryPage() {
           animate={{ opacity: 1 }}
           transition={{ delay: 0.2 }}
         >
-          {(['all', 'Common', 'Rare', 'Epic', 'Legendary', 'Mythic'] as FilterType[]).map((type) => (
+          {(['all', 'Normal', 'Rare', 'Epic', 'Legendary', 'Mythic'] as FilterType[]).map((type) => (  // ✅ Common → Normal
             <button
               key={type}
               onClick={() => setFilter(type)}
