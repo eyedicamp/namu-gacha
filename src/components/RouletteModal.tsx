@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 
 interface RouletteModalProps {
@@ -11,8 +11,18 @@ interface RouletteModalProps {
 
 const ROULETTE_SEGMENTS = [2, 3, 4, 5, 6, 7, 8, 10, 12, 15, 4, 6] as const;
 const SEGMENT_COLORS = [
-  '#7c3aed', '#2563eb', '#9333ea', '#0891b2', '#7e22ce', '#1d4ed8',
-  '#a855f7', '#f59e0b', '#ef4444', '#f97316', '#3b82f6', '#8b5cf6',
+  '#7c3aed',
+  '#2563eb',
+  '#9333ea',
+  '#0891b2',
+  '#7e22ce',
+  '#1d4ed8',
+  '#a855f7',
+  '#f59e0b',
+  '#ef4444',
+  '#f97316',
+  '#3b82f6',
+  '#8b5cf6',
 ] as const;
 
 const WHEEL_SIZE = 320;
@@ -34,7 +44,11 @@ function sectorPath(startDeg: number, endDeg: number) {
   return `M ${CENTER} ${CENTER} L ${p1.x} ${p1.y} A ${RADIUS} ${RADIUS} 0 0 1 ${p2.x} ${p2.y} Z`;
 }
 
-export default function RouletteModal({ isOpen, onClose, onReward }: RouletteModalProps) {
+export default function RouletteModal({
+  isOpen,
+  onClose,
+  onReward,
+}: RouletteModalProps) {
   const [rotation, setRotation] = useState(0);
   const [isSpinning, setIsSpinning] = useState(false);
   const [result, setResult] = useState<number | null>(null);
@@ -42,23 +56,24 @@ export default function RouletteModal({ isOpen, onClose, onReward }: RouletteMod
 
   const segmentAngle = 360 / ROULETTE_SEGMENTS.length;
 
+  useEffect(() => {
+    if (!isOpen) {
+      setResult(null);
+      setCanReroll(true);
+      setIsSpinning(false);
+    }
+  }, [isOpen]);
+
   const resetState = () => {
     setResult(null);
     setCanReroll(true);
     setIsSpinning(false);
   };
 
-  const handleClose = () => {
-    if (isSpinning) return;
-    resetState();
-    onClose();
-  };
-
   const spinToIndex = (chosenIndex: number) => {
     setResult(null);
     setIsSpinning(true);
 
-    // 선택 칸 중심 각도 (룰렛 원본 기준, 0도는 오른쪽)
     const centerAngle = -90 + chosenIndex * segmentAngle + segmentAngle / 2;
 
     setRotation((prev) => {
@@ -103,7 +118,6 @@ export default function RouletteModal({ isOpen, onClose, onReward }: RouletteMod
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={handleClose}
           />
 
           <motion.div
@@ -114,7 +128,12 @@ export default function RouletteModal({ isOpen, onClose, onReward }: RouletteMod
           >
             <div className="relative w-full max-w-lg rounded-3xl border border-purple-400/40 bg-gradient-to-b from-gray-900 to-black p-6 shadow-[0_0_80px_rgba(168,85,247,0.35)]">
               <div className="mb-4 text-center">
-                <h2 className="text-3xl font-black tracking-tight text-white">🎡 보너스 룰렛</h2>
+                <h2 className="text-3xl font-black tracking-tight text-white">
+                  🎡 보너스 룰렛
+                </h2>
+                <p className="mt-2 text-sm text-gray-400">
+                  입장 시 즉시 1회 차감되며, 보상을 확정해야 종료됩니다.
+                </p>
               </div>
 
               <div className="relative mx-auto mb-6 h-80 w-80">
@@ -127,7 +146,10 @@ export default function RouletteModal({ isOpen, onClose, onReward }: RouletteMod
                   animate={{ rotate: rotation }}
                   transition={{ duration: 4.3, ease: [0.08, 0.72, 0.16, 1] }}
                 >
-                  <svg viewBox={`0 0 ${WHEEL_SIZE} ${WHEEL_SIZE}`} className="h-full w-full rounded-full">
+                  <svg
+                    viewBox={`0 0 ${WHEEL_SIZE} ${WHEEL_SIZE}`}
+                    className="h-full w-full rounded-full"
+                  >
                     {ROULETTE_SEGMENTS.map((_, idx) => {
                       const start = -90 + idx * segmentAngle;
                       const end = start + segmentAngle;
@@ -150,7 +172,9 @@ export default function RouletteModal({ isOpen, onClose, onReward }: RouletteMod
                       <div
                         key={`${value}-${idx}`}
                         className="absolute left-1/2 top-1/2"
-                        style={{ transform: `rotate(${angle}deg) translateY(-130px) rotate(${-angle}deg)` }}
+                        style={{
+                          transform: `rotate(${angle}deg) translateY(-130px) rotate(${-angle}deg)`,
+                        }}
                       >
                         <span className="block -translate-x-1/2 -translate-y-1/2 text-sm font-black text-white drop-shadow-[0_0_8px_rgba(0,0,0,0.95)]">
                           +{value}
@@ -181,19 +205,11 @@ export default function RouletteModal({ isOpen, onClose, onReward }: RouletteMod
                 )}
 
                 <div className="flex flex-wrap gap-3">
-                  <button
-                    onClick={handleClose}
-                    disabled={isSpinning}
-                    className="flex-1 rounded-xl border border-white/20 bg-white/5 py-3 font-semibold text-gray-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    닫기
-                  </button>
-
                   {result === null ? (
                     <motion.button
                       onClick={handleSpin}
                       disabled={isSpinning}
-                      className="flex-1 rounded-xl bg-gradient-to-r from-purple-600 via-fuchsia-500 to-blue-600 py-3 font-black text-white shadow-[0_0_30px_rgba(168,85,247,0.7)] disabled:cursor-not-allowed disabled:opacity-60"
+                      className="w-full rounded-xl bg-gradient-to-r from-purple-600 via-fuchsia-500 to-blue-600 py-3 font-black text-white shadow-[0_0_30px_rgba(168,85,247,0.7)] disabled:cursor-not-allowed disabled:opacity-60"
                       whileHover={{ scale: isSpinning ? 1 : 1.04 }}
                       whileTap={{ scale: isSpinning ? 1 : 0.98 }}
                     >

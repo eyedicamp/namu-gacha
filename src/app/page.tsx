@@ -16,13 +16,15 @@ export default function Home() {
   const [pullCount, setPullCount] = useState(0);
   const [remaining, setRemaining] = useState<number>(10);
   const [isDevMode, setIsDevMode] = useState(false);
-  
-  // 룰렛 보상 관련 상태
+
+  // 룰렛 사용 관련 상태
   const [rouletteCount, setRouletteCount] = useState(0);
   const [isRouletteOpen, setIsRouletteOpen] = useState(false);
 
   useEffect(() => {
-    const isDev = process.env.NODE_ENV === 'development' || window.location.hostname === 'localhost';
+    const isDev =
+      process.env.NODE_ENV === 'development' ||
+      window.location.hostname === 'localhost';
     setIsDevMode(isDev);
   }, []);
 
@@ -35,19 +37,25 @@ export default function Home() {
     const today = new Date().toISOString().split('T')[0];
     const stored = localStorage.getItem('gacha_daily');
     const rouletteStored = localStorage.getItem('gacha_roulette_daily');
-    
+
     if (stored) {
       const data = JSON.parse(stored);
       if (data.date === today) {
         setPullCount(data.count);
         setRemaining(10 - data.count);
       } else {
-        localStorage.setItem('gacha_daily', JSON.stringify({ date: today, count: 0 }));
+        localStorage.setItem(
+          'gacha_daily',
+          JSON.stringify({ date: today, count: 0 })
+        );
         setPullCount(0);
         setRemaining(10);
       }
     } else {
-      localStorage.setItem('gacha_daily', JSON.stringify({ date: today, count: 0 }));
+      localStorage.setItem(
+        'gacha_daily',
+        JSON.stringify({ date: today, count: 0 })
+      );
     }
 
     if (rouletteStored) {
@@ -55,30 +63,36 @@ export default function Home() {
       if (rouletteData.date === today) {
         setRouletteCount(rouletteData.count);
       } else {
-        localStorage.setItem('gacha_roulette_daily', JSON.stringify({ date: today, count: 0 }));
+        localStorage.setItem(
+          'gacha_roulette_daily',
+          JSON.stringify({ date: today, count: 0 })
+        );
         setRouletteCount(0);
       }
     } else {
-      localStorage.setItem('gacha_roulette_daily', JSON.stringify({ date: today, count: 0 }));
+      localStorage.setItem(
+        'gacha_roulette_daily',
+        JSON.stringify({ date: today, count: 0 })
+      );
     }
   }, [isDevMode]);
 
   const saveToHistory = (gachaResult: GachaResult) => {
     const history = localStorage.getItem('gacha_history');
     const items: GachaResult[] = history ? JSON.parse(history) : [];
-    
+
     const newItem: GachaResult = {
       ...gachaResult,
       pulledAt: new Date().toISOString(),
       id: `${Date.now()}-${Math.random()}`,
     };
-    
+
     items.unshift(newItem);
-    
+
     if (items.length > 100) {
       items.pop();
     }
-    
+
     localStorage.setItem('gacha_history', JSON.stringify(items));
   };
 
@@ -94,9 +108,9 @@ export default function Home() {
 
     try {
       const res = await fetch('/api/gacha');
-      
+
       if (!res.ok) throw new Error('API 요청 실패');
-      
+
       const data: GachaResult = await res.json();
 
       const delay = getRevealDelay(data.rarity);
@@ -104,46 +118,59 @@ export default function Home() {
 
       setResult(data);
       saveToHistory(data);
-      
+
       if (!isDevMode) {
         const today = new Date().toISOString().split('T')[0];
         const newCount = pullCount + 1;
-        localStorage.setItem('gacha_daily', JSON.stringify({ date: today, count: newCount }));
-        
+        localStorage.setItem(
+          'gacha_daily',
+          JSON.stringify({ date: today, count: newCount })
+        );
+
         setPullCount(newCount);
         setRemaining(10 - newCount);
       }
-      
+
       setPhase('result');
-      
     } catch {
       setError('문서를 가져오는 데 실패했습니다. 다시 시도해주세요.');
       setPhase('idle');
     }
   };
 
-  // 룰렛 열기
+  // 룰렛 열기: 입장 즉시 1회 차감
   const handleOpenRoulette = () => {
+    if (isRouletteOpen) return;
+
     if (rouletteCount >= 2) {
       setError('오늘 룰렛 사용 횟수를 모두 사용했습니다! (최대 2회)');
       return;
     }
+
+    const today = new Date().toISOString().split('T')[0];
+    const newRouletteCount = rouletteCount + 1;
+
+    localStorage.setItem(
+      'gacha_roulette_daily',
+      JSON.stringify({ date: today, count: newRouletteCount })
+    );
+    setRouletteCount(newRouletteCount);
+    setError(null);
     setIsRouletteOpen(true);
   };
 
   // 룰렛 보상 적용
   const handleRouletteReward = (reward: number) => {
     const today = new Date().toISOString().split('T')[0];
-    const newRouletteCount = rouletteCount + 1;
-
-    localStorage.setItem('gacha_roulette_daily', JSON.stringify({ date: today, count: newRouletteCount }));
-    setRouletteCount(newRouletteCount);
 
     const stored = localStorage.getItem('gacha_daily');
     if (stored) {
       const data = JSON.parse(stored);
       const newCount = Math.max(0, data.count - reward);
-      localStorage.setItem('gacha_daily', JSON.stringify({ date: today, count: newCount }));
+      localStorage.setItem(
+        'gacha_daily',
+        JSON.stringify({ date: today, count: newCount })
+      );
       setPullCount(newCount);
       setRemaining(10 - newCount);
     }
@@ -153,17 +180,17 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center p-6 overflow-hidden pt-24">
+    <main className="min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center p-6 overflow-hidden pt-32 sm:pt-24">
       <Navigation />
-      
+
       <RouletteModal
         isOpen={isRouletteOpen}
         onClose={() => setIsRouletteOpen(false)}
         onReward={handleRouletteReward}
       />
-      
+
       <motion.h1
-        className="text-4xl font-bold mb-2"
+        className="text-4xl font-bold mb-2 text-center"
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
@@ -171,7 +198,7 @@ export default function Home() {
         🎰 나무가챠
       </motion.h1>
       <motion.p
-        className="text-gray-400 mb-10"
+        className="text-gray-400 mb-10 text-center"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.3 }}
@@ -190,7 +217,11 @@ export default function Home() {
             <span className="text-green-400 font-bold">🔧 개발 모드 (무제한)</span>
           ) : (
             <>
-              남은 기회: <span className="text-xl font-bold text-yellow-400">{remaining}</span> / 10
+              남은 기회:{' '}
+              <span className="text-xl font-bold text-yellow-400">
+                {remaining}
+              </span>{' '}
+              / 10
             </>
           )}
         </p>
@@ -199,7 +230,7 @@ export default function Home() {
       {!isDevMode && remaining === 0 && rouletteCount < 2 && (
         <motion.button
           onClick={handleOpenRoulette}
-          className="mb-4 px-6 py-3 rounded-xl text-sm font-bold bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 transition-all"
+          className="mb-4 px-6 py-3 rounded-xl text-sm font-bold bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 transition-all text-center"
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           whileHover={{ scale: 1.05 }}
@@ -220,10 +251,18 @@ export default function Home() {
             : 'bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500'
           }
         `}
-        whileHover={phase !== 'loading' && (isDevMode || remaining > 0) ? { scale: 1.05 } : {}}
-        whileTap={phase !== 'loading' && (isDevMode || remaining > 0) ? { scale: 0.95 } : {}}
+        whileHover={
+          phase !== 'loading' && (isDevMode || remaining > 0) ? { scale: 1.05 } : {}
+        }
+        whileTap={
+          phase !== 'loading' && (isDevMode || remaining > 0) ? { scale: 0.95 } : {}
+        }
       >
-        {phase === 'loading' ? '뽑는 중...' : (!isDevMode && remaining <= 0) ? '오늘 뽑기 종료' : '🎲 뽑기!'}
+        {phase === 'loading'
+          ? '뽑는 중...'
+          : !isDevMode && remaining <= 0
+            ? '오늘 뽑기 종료'
+            : '🎲 뽑기!'}
       </motion.button>
 
       {!isDevMode && pullCount > 0 && (
@@ -239,7 +278,7 @@ export default function Home() {
       <AnimatePresence>
         {error && (
           <motion.p
-            className={`mt-6 ${error.includes('✅') ? 'text-green-400' : 'text-red-400'}`}
+            className={`mt-6 text-center ${error.includes('✅') ? 'text-green-400' : 'text-red-400'}`}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
@@ -302,10 +341,15 @@ export default function Home() {
 
 function getRevealDelay(rarity: string): number {
   switch (rarity) {
-    case 'Mythic': return 2000;
-    case 'Legendary': return 1500;
-    case 'Epic': return 1000;
-    case 'Rare': return 600;
-    default: return 300;
+    case 'Mythic':
+      return 2000;
+    case 'Legendary':
+      return 1500;
+    case 'Epic':
+      return 1000;
+    case 'Rare':
+      return 600;
+    default:
+      return 300;
   }
 }

@@ -25,30 +25,27 @@ export default function LibraryPage() {
     if (stored) {
       const items: GachaResult[] = JSON.parse(stored);
       setHistory(items);
-      
-      // 통계 계산
+
       const newStats = {
         total: items.length,
-        Normal: items.filter(i => i.rarity === 'Normal').length,
-        Rare: items.filter(i => i.rarity === 'Rare').length,
-        Epic: items.filter(i => i.rarity === 'Epic').length,
-        Legendary: items.filter(i => i.rarity === 'Legendary').length,
-        Mythic: items.filter(i => i.rarity === 'Mythic').length,
+        Normal: items.filter((i) => i.rarity === 'Normal').length,
+        Rare: items.filter((i) => i.rarity === 'Rare').length,
+        Epic: items.filter((i) => i.rarity === 'Epic').length,
+        Legendary: items.filter((i) => i.rarity === 'Legendary').length,
+        Mythic: items.filter((i) => i.rarity === 'Mythic').length,
       };
       setStats(newStats);
     }
   }, []);
 
-  const filteredHistory = filter === 'all' 
-    ? history 
-    : history.filter(item => item.rarity === filter);
+  const filteredHistory =
+    filter === 'all' ? history : history.filter((item) => item.rarity === filter);
 
   return (
-    <main className="min-h-screen bg-gray-950 text-white p-6 pt-24">
+    <main className="min-h-screen bg-gray-950 text-white p-6 pt-32 sm:pt-24">
       <Navigation />
-      
+
       <div className="max-w-6xl mx-auto">
-        {/* 헤더 */}
         <motion.div
           className="text-center mb-8"
           initial={{ opacity: 0, y: -20 }}
@@ -58,7 +55,6 @@ export default function LibraryPage() {
           <p className="text-gray-400">지금까지 뽑은 문서들</p>
         </motion.div>
 
-        {/* 통계 */}
         <motion.div
           className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-8"
           initial={{ opacity: 0, y: 20 }}
@@ -91,29 +87,29 @@ export default function LibraryPage() {
           </div>
         </motion.div>
 
-        {/* ✅ 필터 (기록삭제 버튼 제거) */}
         <motion.div
           className="flex flex-wrap gap-2 mb-6 justify-center"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.2 }}
         >
-          {(['all', 'Normal', 'Rare', 'Epic', 'Legendary', 'Mythic'] as FilterType[]).map((type) => (
-            <button
-              key={type}
-              onClick={() => setFilter(type)}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                filter === type
-                  ? 'bg-white text-gray-900'
-                  : 'bg-white/10 text-white hover:bg-white/20'
-              }`}
-            >
-              {type === 'all' ? '전체' : type}
-            </button>
-          ))}
+          {(['all', 'Normal', 'Rare', 'Epic', 'Legendary', 'Mythic'] as FilterType[]).map(
+            (type) => (
+              <button
+                key={type}
+                onClick={() => setFilter(type)}
+                className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                  filter === type
+                    ? 'bg-white text-gray-900'
+                    : 'bg-white/10 text-white hover:bg-white/20'
+                }`}
+              >
+                {type === 'all' ? '전체' : type}
+              </button>
+            )
+          )}
         </motion.div>
 
-        {/* 카드 그리드 */}
         {filteredHistory.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredHistory.map((item, index) => (
@@ -128,7 +124,7 @@ export default function LibraryPage() {
           >
             <p className="text-6xl mb-4">📭</p>
             <p className="text-gray-400">
-              {filter === 'all' 
+              {filter === 'all'
                 ? '아직 뽑은 문서가 없습니다'
                 : `${filter} 등급 문서가 없습니다`}
             </p>
