@@ -3,11 +3,11 @@ export type GachaRarity = 'Normal' | 'Rare' | 'Epic' | 'Legendary' | 'Mythic';
 export interface GachaResult {
   title: string;
   url: string;
-  rarity: 'Common' | 'Rare' | 'Epic' | 'Legendary' | 'Mythic';
+  rarity: 'Normal' | 'Rare' | 'Epic' | 'Legendary' | 'Mythic';
   remaining?: number;
   resetTime?: string;
-  pulledAt?: string; // 뽑은 시간
-  id?: string; // 고유 ID
+  pulledAt?: string;
+  id?: string;
 }
 
 export interface GachaHistory {
@@ -64,4 +64,4 @@ export const RARITY_CONFIG: Record<GachaRarity, {
     borderColor: 'border-red-500',
     glowColor: '#ef4444',
   },
-};  
+};
