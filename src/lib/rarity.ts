@@ -1,23 +1,19 @@
 import { GachaRarity } from '@/types/gacha';
 
 /**
- * 나무마크 원문 기준 등급 판정
+ * 나무위키 문서 등급 판정 (순수 문서 길이 기반)
  *
- * 점수 = contentLength + (linkCount * 80)
- *
- *   Mythic     : score >= 60000  (진짜 대형 문서만)
- *   Legendary  : score >= 25000
- *   Epic       : score >= 10000
- *   Rare       : score >= 3000
- *   Normal     : 나머지
+ * 나무위키 56만개 문서 실제 length 분포 기반 threshold:
+ *   Mythic     ~3%   : length >= 25000  (상위 3%)
+ *   Legendary  ~9%   : length >= 9000   (상위 12%)
+ *   Epic       ~18%  : length >= 3500   (상위 30%)
+ *   Rare       ~30%  : length >= 1200   (상위 60%)
+ *   Normal     ~40%  : 나머지
  */
-export function determineRarity(contentLength: number, linkCount: number): GachaRarity {
-  const score = contentLength + linkCount * 80;
-
-  if (score >= 60000) return 'Mythic';
-  if (score >= 25000) return 'Legendary';
-  if (score >= 10000) return 'Epic';
-  if (score >= 3000)  return 'Rare';
+export function determineRarity(contentLength: number): GachaRarity {
+  if (contentLength >= 25000) return 'Mythic';
+  if (contentLength >= 9000)  return 'Legendary';
+  if (contentLength >= 3500)  return 'Epic';
+  if (contentLength >= 1200)  return 'Rare';
   return 'Normal';
-
 }

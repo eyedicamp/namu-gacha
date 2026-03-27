@@ -6,16 +6,16 @@ export interface GachaResult {
   url: string;
   rarity: GachaRarity;
   contentLength: number;
-  linkCount: number;
+  // linkCount 제거됨
 }
 
 export const RARITY_CONFIG: Record<GachaRarity, {
   label: string;
   emoji: string;
-  color: string;        // Tailwind text color
-  bgColor: string;      // Tailwind bg color
-  borderColor: string;  // Tailwind border color
-  glowColor: string;    // CSS glow color
+  color: string;
+  bgColor: string;
+  borderColor: string;
+  glowColor: string;
 }> = {
   Normal: {
     label: '⬜ Normal',
@@ -57,4 +57,4 @@ export const RARITY_CONFIG: Record<GachaRarity, {
     borderColor: 'border-red-500',
     glowColor: '#ef4444',
   },
-};
+};  

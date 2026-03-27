@@ -258,7 +258,6 @@ export default function GachaCard({ result }: GachaCardProps) {
             transition={{ delay: 0.4 }}
           >
             <span>📝 {result.contentLength.toLocaleString()}자</span>
-            <span>🔗 링크 {result.linkCount}개</span>
           </motion.div>
 
           {/* 나무위키 링크 */}
